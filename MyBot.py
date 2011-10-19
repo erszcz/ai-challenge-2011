@@ -7,8 +7,18 @@ import sys
 import logging
 from optparse import OptionParser
 
+#DEBUG=True
+DEBUG=False
+
 def dbg(msg):
-    sys.stderr.write(msg + "\n")
+    if DEBUG:
+        import os
+        logfile = os.path.join(os.path.dirname(__file__), 'debug.log')
+        with file(logfile, 'a') as f:
+            f.write(msg + "\n")
+
+def rand(seq):
+    return seq[randrange(0, len(seq))]
 
 class MyBot:
     def __init__(self):
@@ -30,24 +40,15 @@ class MyBot:
                  if ((a_row-r)**2 + (a_col-c)**2) < ants.viewradius2 ]
 
             # look for nearby food
-            food = nearby(ants.food())
+            #food = nearby(ants.food())
 
             # look for nearby enemies
-            enemies = nearby( ((x,y) for (x,y), owner in ants.enemy_ants()) )
+            #enemies = nearby( ((x,y) for (x,y), owner in ants.enemy_ants()) )
 
             # send new ants in a straight line
             if (not (a_row, a_col) in self.ants_straight and
                     not (a_row, a_col) in self.ants_lefty):
-                if a_row % 2 == 0:
-                    if a_col % 2 == 0:
-                        direction = 'n'
-                    else:
-                        direction = 's'
-                else:
-                    if a_col % 2 == 0:
-                        direction = 'e'
-                    else:
-                        direction = 'w'
+                direction = rand(['n', 's', 'w', 'e'])
                 self.ants_straight[(a_row, a_col)] = direction
 
             # send ants going in a straight line in the same direction
@@ -71,10 +72,12 @@ class MyBot:
             # send ants following a wall, keeping it on their left
             if (a_row, a_col) in self.ants_lefty:
                 direction = self.ants_lefty[(a_row, a_col)]
-                directions = [LEFT[direction], direction, RIGHT[direction], BEHIND[direction]]
+                directions = [LEFT[direction], direction, RIGHT[direction],
+                    BEHIND[direction]]
                 # try 4 directions in order, attempting to turn left at corners
                 for new_direction in directions:
-                    n_row, n_col = ants.destination((a_row, a_col), new_direction)
+                    n_row, n_col = \
+                        ants.destination((a_row, a_col), new_direction)
                     if ants.passable((n_row, n_col)):
                         if (ants.unoccupied((n_row, n_col)) and
                                 not (n_row, n_col) in destinations):
