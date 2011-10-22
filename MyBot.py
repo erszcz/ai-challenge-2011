@@ -49,19 +49,38 @@ class MyBot:
     def __init__(self):
         self.ants_straight = {}
         self.ants_lefty = {}
-        self.ants_harvesting = {}
+        self.ants_tracking = {}
         self.turns = 0
+        self.food = []
+        self.enemy_hills = []
+        self.ants = None
 
     def do_setup(self, ants):
         # initialize data structures after learning the game settings
-        pass
+        log.info("setup")
+        log.info("  viewradius2: %d", ants.viewradius2)
+        log.info("  attackradius2: %d", ants.attackradius2)
+        log.info("  spawnradius2: %d", ants.spawnradius2)
+
+    def start_turn(self, ants):
+        self.ants = ants
+        self.food = ants.food()
+        self.enemy_hills = ants.enemy_hills()
+        
+        self.destinations = []
+        self.new_straight = {}
+        self.new_lefty = {}
+        self.new_tracking = {}
+
+        self.turns += 1
+
+    def end_turn(self):
+        self.ants_straight = self.new_straight
+        self.ants_lefty = self.new_lefty
+        self.ants_tracking = self.new_tracking
 
     def do_turn(self, ants):
-        destinations = []
-        new_straight = {}
-        new_lefty = {}
-        new_harvesting = {}
-        self.turns += 1
+        self.start_turn(ants)
 
         for ant in ants.my_ants():
             a_row, a_col = ant
@@ -69,50 +88,67 @@ class MyBot:
             log.debug("  time remaining: %d" % ants.time_remaining())
 
             # going for food following a computed path?
-            if ant in self.ants_harvesting:
+            if ant in self.ants_tracking:
                 log.info("  is harvesting")
-                path = self.ants_harvesting[ant]
+                path = self.ants_tracking[ant]
                 dest, path_tail = path[0], path[1:]
                 log.debug("  dest: %s, tail: %s", dest, path_tail)
                 if ants.passable(dest):
                     log.debug("  dest is passable")
-                    if ants.unoccupied(dest) and not dest in destinations:
-                        ants.issue_order(( ant,
-                            ants.direction(ant, dest)[0] ))
-                        destinations.append(dest)
+                    if ants.unoccupied(dest) and not dest in self.destinations:
+                        direction = ants.direction(ant, dest)[0]
+                        ants.issue_order((ant, direction))
+                        self.destinations.append(dest)
                         # path unfinished?
                         if path_tail:
-                            new_harvesting[dest] = path_tail
+                            self.new_tracking[dest] = path_tail
                         # that was the last step, do something else
                         else:
-                            new_straight[ant] = rand(DIRECTIONS)
+                            self.new_straight[ant] = direction
                     else:
                         log.debug("  dest is occupied or in destinations")
-                        # have ant wait until it is clear
-                        new_harvesting[dest] = path
-                        destinations.append(ant)
+                        path.insert(0, ant)
+                        self.new_tracking[dest] = path
+                        for d in DIRECTIONS:
+                            dest = ants.destination(ant, d)
+                            if self.move(ant, dest):
+                                break
                     continue
 
             #nearby = lambda targets: [ (r,c) for (r,c) in targets \
                  #if ((a_row-r)**2 + (a_col-c)**2) < ants.viewradius2 ]
             #food = nearby(ants.food())
 
+            # enemy hills?
+            if not ant in self.ants_tracking and self.enemy_hills:
+                hill, _ = min(self.enemy_hills,
+                    key=lambda h: ants.distance(h[0], ant))
+                if ants.distance(ant, hill) <= ants.viewradius2:
+                    path = get_path(ant, hill, ants)
+                    log.info("  found %s hill: %s" %
+                        ("reachable" if path else "unreachable", hill))
+                    if path:
+                        log.info("  starts tracking hill")
+                        self.new_tracking[ant] = path[1:]
+                        continue # to next ant
+
             # food found? find a path to it
-            if not ant in self.ants_harvesting and ants.food():
-                food = min(ants.food(), key=lambda f: ants.distance(f, ant))
-                path = get_path(ant, food, ants)
-                log.info("  found %s food: %s" %
-                    ("reachable" if path else "unreachable", food))
-                log.debug("  time remaining: %d" % ants.time_remaining())
-                if path:
-                    log.info("  starts harvesting")
-                    new_harvesting[ant] = path[1:]
-                    continue # to next ant
+            if not ant in self.ants_tracking and self.food:
+                food = min(self.food, key=lambda f: ants.distance(f, ant))
+                if ants.distance(ant, food) <= ants.viewradius2:
+                    path = get_path(ant, food, ants)
+                    log.info("  found %s food: %s" %
+                        ("reachable" if path else "unreachable", food))
+                    if path:
+                        log.info("  starts harvesting")
+                        self.new_tracking[ant] = path[1:]
+                        self.food.remove(food)
+                        continue # to next ant
 
             # send new ants in a straight line
             if (not ant in self.ants_straight and
                     not ant in self.ants_lefty and
-                    not ant in self.ants_harvesting):
+                    not ant in self.ants_tracking):
                 log.info("  starts going straight")
                 direction = rand(DIRECTIONS)
                 self.ants_straight[ant] = direction
@@ -124,14 +160,14 @@ class MyBot:
                 n_row, n_col = ants.destination(ant, direction)
                 if ants.passable((n_row, n_col)):
                     if (ants.unoccupied((n_row, n_col)) and
-                            not (n_row, n_col) in destinations):
+                            not (n_row, n_col) in self.destinations):
                         ants.issue_order((ant, direction))
-                        new_straight[(n_row, n_col)] = direction
-                        destinations.append((n_row, n_col))
+                        self.new_straight[(n_row, n_col)] = direction
+                        self.destinations.append((n_row, n_col))
                     else:
                         # pause ant, turn and try again next turn
-                        new_straight[ant] = LEFT[direction]
-                        destinations.append(ant)
+                        self.new_straight[ant] = LEFT[direction]
+                        self.destinations.append(ant)
                 else:
                     # hit a wall, start following it
                     log.info("  starts going lefty")
@@ -150,21 +186,25 @@ class MyBot:
                     if ants.passable((n_row, n_col)):
                         if not ants.dead_end((n_row, n_col), new_direction):
                             if (ants.unoccupied((n_row, n_col))
-                                    and not (n_row, n_col) in destinations):
+                                    and not (n_row, n_col) in self.destinations):
                                 ants.issue_order((ant, new_direction))
-                                new_lefty[(n_row, n_col)] = new_direction
-                                destinations.append((n_row, n_col))
+                                self.new_lefty[(n_row, n_col)] = new_direction
+                                self.destinations.append((n_row, n_col))
                                 break
                             else:
                                 # have ant wait until it is clear
-                                new_straight[ant] = RIGHT[direction]
-                                destinations.append(ant)
+                                self.new_straight[ant] = RIGHT[direction]
+                                self.destinations.append(ant)
                                 break
+        self.end_turn()
 
-        # reset lists
-        self.ants_straight = new_straight
-        self.ants_lefty = new_lefty
-        self.ants_harvesting = new_harvesting
+    def move(self, ant, dest):
+        if self.ants.unoccupied(dest) and not dest in self.destinations:
+            direction = self.ants.direction(ant, dest)[0]
+            self.ants.issue_order((ant, direction))
+            self.destinations.append(ant)
+            return True
+        return False
 
 if __name__ == '__main__':
     try:
