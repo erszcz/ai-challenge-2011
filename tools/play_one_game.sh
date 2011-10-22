@@ -4,6 +4,6 @@
   --end_wait=0.25 \
   --verbose \
   --log_dir game_logs \
-  --turns 1000 \
+  --turns "$TURNS" \
   --map_file maps/multi_hill_maze/multi_maze_07.map \
   "$@"

@@ -172,7 +172,13 @@ class Ants():
         'true if not water'
         row, col = loc
         return self.map[row][col] != WATER
-    
+
+    def dead_end(self, loc, direction):
+        destinations = ( self.destination(loc, direction),
+                         self.destination(loc, LEFT[direction]),
+                         self.destination(loc, RIGHT[direction]) )
+        return all(not self.passable(dest) for dest in destinations)
+
     def unoccupied(self, loc):
         'true if no ants are at the location'
         row, col = loc
