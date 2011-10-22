@@ -6,10 +6,10 @@ from ants import *
 
 import astar
 
-#import logging as log
-#log.basicConfig(format='%(message)s',
-                #filename='debug.log',
-                #level=log.DEBUG)
+import logging as log
+log.basicConfig(format='%(message)s',
+                filename='debug.log',
+                level=log.DEBUG)
 
 DIRECTIONS = ['n', 's', 'w', 'e']
 
@@ -28,12 +28,12 @@ def v2sub(a, b):
 
 def get_path(start, goal, ants):
     loc, g = astar.build_graph(start, goal, passable_p=ants.passable)
-    #log.debug("get_path: g =\n  %s" % str(g))
+    log.debug("get_path: g =\n  %s" % str(g))
     passable_p = lambda p: ants.passable(v2add(p, loc))
     #path = astar.path(g, start, goal, distance=ants.distance)
     path = astar.path(g, v2sub(start, loc), v2sub(goal, loc),
             passable_p=passable_p)
-    #log.debug("get_path: path =\n  %s" % str(path))
+    log.debug("get_path: path =\n  %s" % str(path))
     #astar.dump_path("path_%s_%s.dat" % (start, goal), g,
         #v2sub(start, loc), v2sub(goal, loc), path)
     return map(lambda p1: v2add(p1, loc), path)
@@ -50,10 +50,10 @@ class MyBot:
 
     def do_setup(self, ants):
         # initialize data structures after learning the game settings
-        #log.info("setup")
-        #log.info("  viewradius2: %d", ants.viewradius2)
-        #log.info("  attackradius2: %d", ants.attackradius2)
-        #log.info("  spawnradius2: %d", ants.spawnradius2)
+        log.info("setup")
+        log.info("  viewradius2: %d", ants.viewradius2)
+        log.info("  attackradius2: %d", ants.attackradius2)
+        log.info("  spawnradius2: %d", ants.spawnradius2)
         pass
 
     def start_turn(self, ants):
@@ -78,17 +78,17 @@ class MyBot:
 
         for ant in ants.my_ants():
             a_row, a_col = ant
-            #log.info("turn %d: ant %s" % (self.turns, ant))
-            #log.debug("  time remaining: %d" % ants.time_remaining())
+            log.info("turn %d: ant %s" % (self.turns, ant))
+            log.debug("  time remaining: %d" % ants.time_remaining())
 
             # going for food following a computed path?
             if ant in self.ants_tracking:
-                #log.info("  is harvesting")
+                log.info("  is harvesting")
                 path = self.ants_tracking[ant]
                 dest, path_tail = path[0], path[1:]
-                #log.debug("  dest: %s, tail: %s", dest, path_tail)
+                log.debug("  dest: %s, tail: %s", dest, path_tail)
                 if ants.passable(dest):
-                    #log.debug("  dest is passable")
+                    log.debug("  dest is passable")
                     if ants.unoccupied(dest) and not dest in self.destinations:
                         direction = ants.direction(ant, dest)[0]
                         ants.issue_order((ant, direction))
@@ -100,7 +100,7 @@ class MyBot:
                         else:
                             self.new_straight[ant] = direction
                     else:
-                        #log.debug("  dest is occupied or in destinations")
+                        log.debug("  dest is occupied or in destinations")
                         path.insert(0, ant)
                         self.new_tracking[dest] = path
                         for d in DIRECTIONS:
@@ -119,10 +119,10 @@ class MyBot:
                     key=lambda h: ants.distance(h[0], ant))
                 if ants.distance(ant, hill) <= ants.viewradius2:
                     path = get_path(ant, hill, ants)
-                    #log.info("  found %s hill: %s" %
+                    log.info("  found %s hill: %s" %
                         ("reachable" if path else "unreachable", hill))
                     if path:
-                        #log.info("  starts tracking hill")
+                        log.info("  starts tracking hill")
                         self.new_tracking[ant] = path[1:]
                         continue # to next ant
 
@@ -131,10 +131,10 @@ class MyBot:
                 food = min(self.food, key=lambda f: ants.distance(f, ant))
                 if ants.distance(ant, food) <= ants.viewradius2:
                     path = get_path(ant, food, ants)
-                    #log.info("  found %s food: %s" %
+                    log.info("  found %s food: %s" %
                         ("reachable" if path else "unreachable", food))
                     if path:
-                        #log.info("  starts harvesting")
+                        log.info("  starts harvesting")
                         self.new_tracking[ant] = path[1:]
                         self.food.remove(food)
                         continue # to next ant
@@ -143,13 +143,13 @@ class MyBot:
             if (not ant in self.ants_straight and
                     not ant in self.ants_lefty and
                     not ant in self.ants_tracking):
-                #log.info("  starts going straight")
+                log.info("  starts going straight")
                 direction = rand(DIRECTIONS)
                 self.ants_straight[ant] = direction
 
             # send ants going in a straight line in the same direction
             if ant in self.ants_straight:
-                #log.info("  goes straight")
+                log.info("  goes straight")
                 direction = self.ants_straight[ant]
                 n_row, n_col = ants.destination(ant, direction)
                 if ants.passable((n_row, n_col)):
@@ -164,12 +164,12 @@ class MyBot:
                         self.destinations.append(ant)
                 else:
                     # hit a wall, start following it
-                    #log.info("  starts going lefty")
+                    log.info("  starts going lefty")
                     self.ants_lefty[ant] = RIGHT[direction]
 
             # send ants following a wall, keeping it on their left
             if ant in self.ants_lefty:
-                #log.info("  goes lefty")
+                log.info("  goes lefty")
                 direction = self.ants_lefty[ant]
                 directions = [LEFT[direction], direction, RIGHT[direction],
                     BEHIND[direction]]

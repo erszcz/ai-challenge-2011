@@ -59,9 +59,23 @@ def test():
     p = path(graph, start, goal)
     time_delta = 1000 * (time.clock() - time0)
 
-    print p
-    print "time:", time_delta
+    #print p
+    #print "time:", time_delta
     dump_path("debug.dat", graph, start, goal, p)
+
+def test_h_simple():
+    start, goal = (0,0), (20,20)
+    _, g = build_graph(start, goal, h_cost=h_simple)
+    p = path(g, start, goal)
+    dump_path("test_astar_h_simple.dat", g, start, goal, p)
+
+def test_h_cross():
+    start, goal = (0,0), (20,20)
+    _, g = build_graph(start, goal, h_cost=h_cross)
+    p = path(g, start, goal)
+    dump_path("test_astar_h_cross.dat", g, start, goal, p)
 
 if __name__ == '__main__':
     test()
+    test_h_simple()
+    test_h_cross()

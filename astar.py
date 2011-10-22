@@ -34,11 +34,13 @@ class priority_set:
         return key in self.s
 
     def __str__(self):
+        # print just the queue, sorted by priority
+        return "%s" % (sorted(self.q, key=lambda i: i[0]))
         # print both set and queue, sorting by coords
         #return "(%s,\n %s)" % (str(sorted(self.s)),
             #str(sorted(self.q, key=lambda i: i[1])))
         # print just the queue, sorting by priority
-        return str(sorted(self.q))
+        #return str(sorted(self.q))
 
     def empty(self):
         return len(self.q) == 0
@@ -55,23 +57,15 @@ def make_adjacent(graph, passable_p=lambda p: True):
             [(r, c-1), (r, c+1), (r-1, c), (r+1, c)])
     return adjacent
 
-def make_cost_estimate(graph):
-    def cost(loc):
-        r,c = loc
-        #log.debug("cost: %d, %d", r, c)
-        return graph[r][c]
-    return cost
-
 def path(graph, start, goal, distance=distance, passable_p=lambda p: True):
     #print "path", start, goal
     adjacent = make_adjacent(graph, passable_p=passable_p)
-    cost_estimate = make_cost_estimate(graph)
 
     g_score = {}
     h_score = {}
     f_score = {}
 
-    h_cost = cost_estimate
+    h_cost = lambda loc: graph[loc[0]][loc[1]]
 
     g_score[start] = 0
     h_score[start] = h_cost(start)
@@ -104,9 +98,9 @@ def path(graph, start, goal, distance=distance, passable_p=lambda p: True):
                 if not y in frontier:
                     #print y, f_score[y]
                     frontier.add(f_score[y], y)
-                else:
-                    frontier.remove(y)
-                    frontier.add(f_score[y], y)
+                #else:
+                    #frontier.remove(y)
+                    #frontier.add(f_score[y], y)
 
         #print frontier, "\n"
         #print x, came_from[x] if came_from.has_key(x) else "", "\n"
@@ -124,7 +118,19 @@ def reconstruct_path(came_from, current_node):
     else:
         return [current_node]
 
-def build_graph(start, goal, distance=distance, passable_p=lambda p: True):
+def h_simple(start, goal, p, distance):
+    return distance(p, goal)
+
+def h_cross(start, goal, p, distance):
+    dx1 = p[0] - goal[0]
+    dy1 = p[1] - goal[1]
+    dx2 = start[0] - goal[0]
+    dy2 = start[1] - goal[1]
+    cross = abs(dx1*dy2 - dx2*dy1)
+    return 0.001 * cross + distance(p, goal)
+
+def build_graph(start, goal, distance=distance,
+        passable_p=lambda p: True, h_cost=h_cross):
     rmin, rmax = [f(start[0], goal[0]) for f in (min,max)]
     cmin, cmax = [f(start[1], goal[1]) for f in (min,max)]
     w = cmax - cmin + 1
@@ -136,7 +142,7 @@ def build_graph(start, goal, distance=distance, passable_p=lambda p: True):
         for j in xrange(w):
             p = (rmin + i, cmin + j)
             if passable_p(p):
-                row.append(distance(p, goal))
+                row.append(h_cost(start, goal, p, distance))
             else:
                 row.append(unpassable)
         graph.append(row)
@@ -158,9 +164,9 @@ def dump_path(filename, graph, start, goal, path):
                     f.write("color 120 120 120\n")
                 else:
                     f.write("point %d %d\n" % (j,i))
-        #for r,c in path:
-            #f.write("color 255 255 255\n")
-            #f.write("point %d %d\n" % (c,r))
+        for r,c in path:
+            f.write("color 255 255 255\n")
+            f.write("point %d %d\n" % (c,r))
         f.write("color 0 255 0\n")
         f.write("point %d %d\n" % (start[1], start[0]))
         f.write("color 255 0 0\n")
