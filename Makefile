@@ -1,20 +1,28 @@
-TURNS = 500
+ifndef TURNS
+	TURNS = 500
+endif
 
 test-bot:
 	[ -f debug.log ] && rm debug.log; \
 	cd tools/ && ./test_bot.sh "python ../MyBot.py"
 
 test-game:
-	export TURNS=$(TURNS); \
 	[ -f debug.log ] && rm debug.log; \
-	cd tools/ && ./play_one_game.sh \
+	tools/playgame.py \
+		--player_seed 42 \
+		--end_wait=0.25 \
+		--verbose \
+		--log_dir tools/game_logs \
+		--html replay.0.html \
+		--nolaunch \
+		--turns $(TURNS) \
+		--map_file tools/maps/multi_hill_maze/multi_maze_07.map \
 		--turntime 1000 \
-		--log_error \
 		--log_stderr \
-		"python ../MyBot.py" \
-		"python sample_bots/python/LeftyBot.py" \
-		"python sample_bots/python/LeftyBot.py" \
-		"python sample_bots/python/LeftyBot.py"
+		"python MyBot.py" \
+		"python tools/sample_bots/python/LeftyBot.py" \
+		"python tools/sample_bots/python/LeftyBot.py" \
+		"python tools/sample_bots/python/LeftyBot.py"
 
 zip:
 	[ -f rszymczyszyn.zip ] && rm rszymczyszyn.zip; \
