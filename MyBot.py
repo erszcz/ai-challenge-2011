@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 # vim: sts=4 sw=4 ts=4 tw=74 et
-from random import randrange, shuffle, random
+from random import randrange, shuffle
 from ants import *
 
+from math import atan
 import astar
 
 import logging as log
@@ -49,6 +50,7 @@ class MyBot:
         self.enemy_hills = []
         self.my_hills = []
         self.ants = None
+        self.guard_threshold = 0.0
 
     def do_setup(self, ants):
         # initialize data structures after learning the game settings
@@ -72,6 +74,9 @@ class MyBot:
 
         self.turns += 1
 
+        x = self.turns / ants.turns
+        self.guard_threshold = atan(2.0 * x) / 3.0
+
     def end_turn(self):
         self.ants_straight = self.new_straight
         self.ants_lefty = self.new_lefty
@@ -86,7 +91,7 @@ class MyBot:
             log.info("turn %d: ant %s" % (self.turns, ant))
             log.debug("  time remaining: %d" % ants.time_remaining())
 
-            # going for food following a computed path?
+            # tracking a path?
             if ant in self.ants_tracking:
                 log.info("  is harvesting")
                 path = self.ants_tracking[ant]
@@ -107,16 +112,13 @@ class MyBot:
                     else:
                         log.debug("  dest is occupied or in destinations")
                         path.insert(0, ant)
+                        shuffle(DIRECTIONS)
                         for d in DIRECTIONS:
                             dest = ants.destination(ant, d)
                             if self.move(ant, dest):
                                 self.new_tracking[dest] = path
                                 break
                     continue
-
-            #nearby = lambda targets: [ (r,c) for (r,c) in targets \
-                 #if ((a_row-r)**2 + (a_col-c)**2) < ants.viewradius2 ]
-            #food = nearby(ants.food())
 
             # enemy hills?
             if not ant in self.ants_tracking and self.enemy_hills:
@@ -145,22 +147,22 @@ class MyBot:
                         continue # to next ant
 
             # new (or free) ants:
-            # - guard 20%
-            # - go straight 80%
             if (not ant in self.ants_straight and
                     not ant in self.ants_lefty and
                     not ant in self.ants_tracking and
                     not ant in self.ants_guarding):
-                choice = rand(2 * ["straight"] + 3 * ["guard"])
-                if choice == "straight":
+                distance_to = lambda target: ants.distance(ant, target)
+                choice = random.random()
+                if choice < self.guard_threshold:
+                    # guard the hill
+                    log.info("  starts guarding")
+                    hill = min(self.my_hills, key=distance_to)
+                    self.ants_guarding[ant] = hill
+                else:
+                    # scout/straight/gather food
                     log.info("  starts going straight")
                     direction = rand(DIRECTIONS)
                     self.ants_straight[ant] = direction
-                elif choice == "guard":
-                    log.info("  starts guarding")
-                    hill = min(self.my_hills,
-                            key=lambda h: ants.distance(h, ant))
-                    self.ants_guarding[ant] = hill
 
             # guarding - random walk in vicinity of a hill
             if ant in self.ants_guarding:
