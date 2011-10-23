@@ -28,12 +28,12 @@ def v2sub(a, b):
 
 def get_path(start, goal, ants):
     loc, g = astar.build_graph(start, goal, passable_p=ants.passable)
-    log.debug("get_path: g =\n  %s" % str(g))
+    #log.debug("get_path: g =\n  %s" % str(g))
     passable_p = lambda p: ants.passable(v2add(p, loc))
     #path = astar.path(g, start, goal, distance=ants.distance)
     path = astar.path(g, v2sub(start, loc), v2sub(goal, loc),
             passable_p=passable_p)
-    log.debug("get_path: path =\n  %s" % str(path))
+    #log.debug("get_path: path =\n  %s" % str(path))
     #astar.dump_path("path_%s_%s.dat" % (start, goal), g,
         #v2sub(start, loc), v2sub(goal, loc), path)
     return map(lambda p1: v2add(p1, loc), path)
