@@ -102,10 +102,10 @@ class MyBot:
                     else:
                         log.debug("  dest is occupied or in destinations")
                         path.insert(0, ant)
-                        self.new_tracking[dest] = path
                         for d in DIRECTIONS:
                             dest = ants.destination(ant, d)
                             if self.move(ant, dest):
+                                self.new_tracking[dest] = path
                                 break
                     continue
 
@@ -192,11 +192,11 @@ class MyBot:
                                 break
         self.end_turn()
 
-    def move(self, ant, dest):
+    def move(self, ant, dest, direction=None):
         if self.ants.unoccupied(dest) and not dest in self.destinations:
-            direction = self.ants.direction(ant, dest)[0]
-            self.ants.issue_order((ant, direction))
-            self.destinations.append(ant)
+            d = direction if direction else self.ants.direction(ant, dest)[0]
+            self.ants.issue_order((ant, d))
+            self.destinations.append(dest)
             return True
         return False
 
