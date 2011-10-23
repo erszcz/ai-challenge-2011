@@ -51,6 +51,7 @@ class MyBot:
         self.my_hills = []
         self.ants = None
         self.guard_threshold = 0.0
+        self.attack_threshold = 0.0
 
     def do_setup(self, ants):
         # initialize data structures after learning the game settings
@@ -76,6 +77,7 @@ class MyBot:
 
         x = self.turns / ants.turns
         self.guard_threshold = atan(2.0 * x) / 3.0
+        self.attack_threshold = x**3/1.1
 
     def end_turn(self):
         self.ants_straight = self.new_straight
@@ -158,6 +160,11 @@ class MyBot:
                     log.info("  starts guarding")
                     hill = min(self.my_hills, key=distance_to)
                     self.ants_guarding[ant] = hill
+                elif choice < self.attack_threshold and self.enemy_hills:
+                    # attack!
+                    log.info("  starts attacking")
+                    hill = min(self.enemy_hills, key=distance_to)
+                    self.ants_tracking[ant] = hill
                 else:
                     # scout/straight/gather food
                     log.info("  starts going straight")
