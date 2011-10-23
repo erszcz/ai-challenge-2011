@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 # vim: sts=4 sw=4 ts=4 tw=74 et
-from random import randrange
+from random import randrange, shuffle, random
 from ants import *
 
 import astar
@@ -43,9 +43,11 @@ class MyBot:
         self.ants_straight = {}
         self.ants_lefty = {}
         self.ants_tracking = {}
+        self.ants_guarding = {}
         self.turns = 0
         self.food = []
         self.enemy_hills = []
+        self.my_hills = []
         self.ants = None
 
     def do_setup(self, ants):
@@ -60,11 +62,13 @@ class MyBot:
         self.ants = ants
         self.food = ants.food()
         self.enemy_hills = ants.enemy_hills()
+        self.my_hills = ants.my_hills()
         
         self.destinations = []
         self.new_straight = {}
         self.new_lefty = {}
         self.new_tracking = {}
+        self.new_guarding = {}
 
         self.turns += 1
 
@@ -72,6 +76,7 @@ class MyBot:
         self.ants_straight = self.new_straight
         self.ants_lefty = self.new_lefty
         self.ants_tracking = self.new_tracking
+        self.ants_guarding = self.new_guarding
 
     def do_turn(self, ants):
         self.start_turn(ants)
@@ -139,13 +144,44 @@ class MyBot:
                         self.food.remove(food)
                         continue # to next ant
 
-            # send new ants in a straight line
+            # new (or free) ants:
+            # - guard 20%
+            # - go straight 80%
             if (not ant in self.ants_straight and
                     not ant in self.ants_lefty and
-                    not ant in self.ants_tracking):
-                log.info("  starts going straight")
-                direction = rand(DIRECTIONS)
-                self.ants_straight[ant] = direction
+                    not ant in self.ants_tracking and
+                    not ant in self.ants_guarding):
+                choice = rand(2 * ["straight"] + 3 * ["guard"])
+                if choice == "straight":
+                    log.info("  starts going straight")
+                    direction = rand(DIRECTIONS)
+                    self.ants_straight[ant] = direction
+                elif choice == "guard":
+                    log.info("  starts guarding")
+                    hill = min(self.my_hills,
+                            key=lambda h: ants.distance(h, ant))
+                    self.ants_guarding[ant] = hill
+
+            # guarding - random walk in vicinity of a hill
+            if ant in self.ants_guarding:
+                hill = self.ants_guarding[ant]
+                if ants.distance(ant, hill) > ants.spawnradius2 + 2:
+                    d = rand(ants.direction(ant, hill))
+                    directions = [d, RIGHT[d], LEFT[d]]
+                else:
+                    directions = DIRECTIONS
+                    shuffle(directions)
+                done = False
+                for d in directions:
+                    dest = ants.destination(ant, d)
+                    if ants.passable(dest) \
+                            and self.move(ant, dest, direction=d):
+                        self.new_guarding[dest] = hill
+                        done = True
+                        break
+                if not done and not ant in self.destinations:
+                    self.new_guarding[ant] = hill
+                    self.destinations.append(ant)
 
             # send ants going in a straight line in the same direction
             if ant in self.ants_straight:
