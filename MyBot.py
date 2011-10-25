@@ -41,8 +41,26 @@ def get_path(start, goal, ants):
 
 class MyBot:
     def __init__(self):
+        n = [ # top wall
+              (0,-3), (1,-3), (-1,-3), (2,-3), (-2,-3), (3,-3), (-3,-3),
+              # left/right wall
+              (-3,-2), (3,-2), (-3,-1), (3,-1), (-3,0), (3,0),
+              (-3,1), (3,1), (-3,2), (3,2), (-3,3), (3,3),
+              # bottom wall
+              (-2,3), (2,3), (-1,3), (1,3), (0,3) ]
+        w = [ # left wall, closest to middle first
+              (-3,0), (-3,-1), (-3,1), (-3,-2), (-3,2), (-3,-3), (-3,3), 
+              # bottom/top wall
+              (-2,-3), (-2,3), (-1,-3), (-1,3), (0,-3), (0,3),
+              (1,-3), (1,3), (2,-3), (2,3), (3,-3), (3,3),
+              # right wall
+              (3,-2), (3,2), (3,-1), (3,1), (3,0) ]
+        self.straight = { "n" : n,
+                          "s" : reversed(n),
+                          "w" : w,
+                          "e" : reversed(w) }
         self.ants_straight = {}
-        self.ants_lefty = {}
+        #self.ants_lefty = {}
         self.ants_tracking = {}
         self.ants_guarding = {}
         self.turns = 0
@@ -51,6 +69,11 @@ class MyBot:
         self.my_hills = []
         self.ants = None
         self.guard_threshold = 0.0
+
+    def distant(self, loc, diff):
+        r,c = loc
+        dr, dc = diff
+        return ((r + dr) % self.ants.rows, (c + dc) % self.ants.cols)
 
     def do_setup(self, ants):
         # initialize data structures after learning the game settings
@@ -68,7 +91,7 @@ class MyBot:
         
         self.destinations = []
         self.new_straight = {}
-        self.new_lefty = {}
+        #self.new_lefty = {}
         self.new_tracking = {}
         self.new_guarding = {}
 
@@ -79,7 +102,7 @@ class MyBot:
 
     def end_turn(self):
         self.ants_straight = self.new_straight
-        self.ants_lefty = self.new_lefty
+        #self.ants_lefty = self.new_lefty
         self.ants_tracking = self.new_tracking
         self.ants_guarding = self.new_guarding
 
@@ -148,7 +171,7 @@ class MyBot:
 
             # new (or free) ants:
             if (not ant in self.ants_straight and
-                    not ant in self.ants_lefty and
+                    #not ant in self.ants_lefty and
                     not ant in self.ants_tracking and
                     not ant in self.ants_guarding):
                 distance_to = lambda target: ants.distance(ant, target)
@@ -185,49 +208,65 @@ class MyBot:
                     self.new_guarding[ant] = hill
                     self.destinations.append(ant)
 
-            # send ants going in a straight line in the same direction
+            # send ants in the same direction
             if ant in self.ants_straight:
                 log.info("  goes straight")
                 direction = self.ants_straight[ant]
-                n_row, n_col = ants.destination(ant, direction)
-                if ants.passable((n_row, n_col)):
-                    if (ants.unoccupied((n_row, n_col)) and
-                            not (n_row, n_col) in self.destinations):
-                        ants.issue_order((ant, direction))
-                        self.new_straight[(n_row, n_col)] = direction
-                        self.destinations.append((n_row, n_col))
-                    else:
-                        # pause ant, turn and try again next turn
-                        self.new_straight[ant] = LEFT[direction]
-                        self.destinations.append(ant)
-                else:
-                    # hit a wall, start following it
-                    log.info("  starts going lefty")
-                    self.ants_lefty[ant] = RIGHT[direction]
+                where = lambda loc: self.distant(ant, loc)
+                for dest in map(where, self.straight[direction]):
+                    if ants.passable(dest):
+                        step_direction = ants.direction(ant, dest)[0]
+                        step_destination = ants.destination(ant,
+                                step_direction)
+                        if self.move(ant, step_destination,
+                                step_direction):
+                            self.new_straight[step_destination] = direction
+                            break
+                # else wait
+
+            # send ants going in a straight line in the same direction
+            #if ant in self.ants_straight:
+                #log.info("  goes straight")
+                #direction = self.ants_straight[ant]
+                #n_row, n_col = ants.destination(ant, direction)
+                #if ants.passable((n_row, n_col)):
+                    #if (ants.unoccupied((n_row, n_col)) and
+                            #not (n_row, n_col) in self.destinations):
+                        #ants.issue_order((ant, direction))
+                        #self.new_straight[(n_row, n_col)] = direction
+                        #self.destinations.append((n_row, n_col))
+                    #else:
+                        ## pause ant, turn and try again next turn
+                        #self.new_straight[ant] = LEFT[direction]
+                        #self.destinations.append(ant)
+                #else:
+                    ## hit a wall, start following it
+                    #log.info("  starts going lefty")
+                    #self.ants_lefty[ant] = RIGHT[direction]
 
             # send ants following a wall, keeping it on their left
-            if ant in self.ants_lefty:
-                log.info("  goes lefty")
-                direction = self.ants_lefty[ant]
-                directions = [LEFT[direction], direction, RIGHT[direction],
-                    BEHIND[direction]]
-                # try 4 directions in order, attempting to turn left at corners
-                for new_direction in directions:
-                    n_row, n_col = \
-                        ants.destination(ant, new_direction)
-                    if ants.passable((n_row, n_col)):
-                        if not ants.dead_end((n_row, n_col), new_direction):
-                            if (ants.unoccupied((n_row, n_col))
-                                    and not (n_row, n_col) in self.destinations):
-                                ants.issue_order((ant, new_direction))
-                                self.new_lefty[(n_row, n_col)] = new_direction
-                                self.destinations.append((n_row, n_col))
-                                break
-                            else:
-                                # have ant wait until it is clear
-                                self.new_straight[ant] = RIGHT[direction]
-                                self.destinations.append(ant)
-                                break
+            #if ant in self.ants_lefty:
+                #log.info("  goes lefty")
+                #direction = self.ants_lefty[ant]
+                #directions = [LEFT[direction], direction, RIGHT[direction],
+                    #BEHIND[direction]]
+                ## try 4 directions in order, attempting to turn left at corners
+                #for new_direction in directions:
+                    #n_row, n_col = \
+                        #ants.destination(ant, new_direction)
+                    #if ants.passable((n_row, n_col)):
+                        #if not ants.dead_end((n_row, n_col), new_direction):
+                            #if (ants.unoccupied((n_row, n_col))
+                                    #and not (n_row, n_col) in self.destinations):
+                                #ants.issue_order((ant, new_direction))
+                                #self.new_lefty[(n_row, n_col)] = new_direction
+                                #self.destinations.append((n_row, n_col))
+                                #break
+                            #else:
+                                ## have ant wait until it is clear
+                                #self.new_straight[ant] = RIGHT[direction]
+                                #self.destinations.append(ant)
+                                #break
         self.end_turn()
 
     def move(self, ant, dest, direction=None):
