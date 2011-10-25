@@ -18,6 +18,7 @@ test-game:
 		--turns $(TURNS) \
 		--map_file tools/maps/multi_hill_maze/multi_maze_07.map \
 		--turntime 1000 \
+		--log_input \
 		--log_stderr \
 		"python MyBot.py" \
 		"python MyBot4.py" \
