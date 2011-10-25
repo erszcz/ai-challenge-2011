@@ -20,9 +20,9 @@ test-game:
 		--turntime 1000 \
 		--log_stderr \
 		"python MyBot.py" \
-		"python tools/sample_bots/python/LeftyBot.py" \
-		"python tools/sample_bots/python/LeftyBot.py" \
-		"python tools/sample_bots/python/LeftyBot.py"
+		"python MyBot4.py" \
+		"python MyBot4.py" \
+		"python MyBot4.py"
 
 zip:
 	[ -f rszymczyszyn.zip ] && rm rszymczyszyn.zip; \
