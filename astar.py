@@ -48,24 +48,14 @@ class priority_set:
 def distance(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-def make_adjacent(graph, passable_p=lambda p: True):
-    def adjacent(node):
-        in_graph = lambda p: p[0] >= 0 and p[0] < len(graph) \
-            and p[1] >= 0 and p[1] < len(graph[0])
-        r, c = node
-        return filter(lambda p: in_graph(p) and passable_p(p),
-            [(r, c-1), (r, c+1), (r-1, c), (r+1, c)])
-    return adjacent
-
-def path(graph, start, goal, distance=distance, passable_p=lambda p: True):
+def path(graph, start, goal, adjacent, distance, cost):
     #print "path", start, goal
-    adjacent = make_adjacent(graph, passable_p=passable_p)
 
     g_score = {}
     h_score = {}
     f_score = {}
 
-    h_cost = lambda loc: graph[loc[0]][loc[1]]
+    h_cost = lambda loc: cost(start, goal, loc, distance)
 
     g_score[start] = 0
     h_score[start] = h_cost(start)
@@ -119,6 +109,7 @@ def reconstruct_path(came_from, current_node):
         return [current_node]
 
 def h_simple(start, goal, p, distance):
+    #print p, goal
     return distance(p, goal)
 
 def h_cross(start, goal, p, distance):
@@ -130,7 +121,7 @@ def h_cross(start, goal, p, distance):
     return 0.001 * cross + distance(p, goal)
 
 def build_graph(start, goal, distance=distance,
-        passable_p=lambda p: True, h_cost=h_cross):
+        passable=lambda p: True, h_cost=h_cross):
     rmin, rmax = [f(start[0], goal[0]) for f in (min,max)]
     cmin, cmax = [f(start[1], goal[1]) for f in (min,max)]
     w = cmax - cmin + 1
@@ -141,14 +132,14 @@ def build_graph(start, goal, distance=distance,
         row = []
         for j in xrange(w):
             p = (rmin + i, cmin + j)
-            if passable_p(p):
+            if passable(p):
                 row.append(h_cost(start, goal, p, distance))
             else:
                 row.append(unpassable)
         graph.append(row)
     return (rmin, cmin), graph
 
-def dump_path(filename, graph, start, goal, path):
+def dump_path(filename, graph, start, goal, path, passable=lambda x: True):
     with file(filename, 'w') as f:
         f.write("# gray  - passable\n")
         f.write("# black - impassable\n")
@@ -158,12 +149,12 @@ def dump_path(filename, graph, start, goal, path):
         f.write("color 120 120 120\n")
         for i in xrange(len(graph)):
             for j in xrange(len(graph[0])):
-                if graph[i][j] == 10000:
+                if not passable((i,j)):
                     f.write("color 0 0 0\n")
                     f.write("point %d %d\n" % (j,i))
                     f.write("color 120 120 120\n")
-                else:
-                    f.write("point %d %d\n" % (j,i))
+                #else:
+                    #f.write("point %d %d\n" % (j,i))
         for r,c in path:
             f.write("color 255 255 255\n")
             f.write("point %d %d\n" % (c,r))
