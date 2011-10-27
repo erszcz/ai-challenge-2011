@@ -28,16 +28,25 @@ def v2sub(a, b):
     return a[0] - b[0], a[1] - b[1]
 
 def get_path(start, goal, ants):
-    loc, g = astar.build_graph(start, goal, passable_p=ants.passable)
     #log.debug("get_path: g =\n  %s" % str(g))
-    passable_p = lambda p: ants.passable(v2add(p, loc))
-    #path = astar.path(g, start, goal, distance=ants.distance)
-    path = astar.path(g, v2sub(start, loc), v2sub(goal, loc),
-            passable_p=passable_p)
-    #log.debug("get_path: path =\n  %s" % str(path))
-    #astar.dump_path("path_%s_%s.dat" % (start, goal), g,
-        #v2sub(start, loc), v2sub(goal, loc), path)
-    return map(lambda p1: v2add(p1, loc), path)
+
+    graph_h = ants.rows
+    graph_w = ants.cols
+
+    def adjacent(node):
+        #log.debug("adjacent: %s" % str(node))
+        r, c = node
+        return filter(ants.passable,
+                [ (r, (c-1) % graph_w), (r, (c+1) % graph_w),
+                  ((r-1) % graph_h, c), ((r+1) % graph_h, c) ])
+
+    p = astar.path(ants.map, start, goal, adjacent, ants.distance,
+            astar.h_simple)
+    
+    #log.debug("get_path: path =\n  %s" % str(p))
+    #dump_path("path_%s_%s_%s.dat" % (start, goal, time.time()),
+            #graph, start, goal, p, passable=passable)
+    return p
 
 class MyBot:
     def __init__(self):
