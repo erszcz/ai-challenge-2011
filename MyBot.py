@@ -17,10 +17,6 @@ DIRECTIONS = ['n', 's', 'w', 'e']
 def rand(seq):
     return seq[randrange(0, len(seq))]
 
-def minmax(seq):
-    reduction = lambda acc,e: (min(e,acc[0]), max(e,acc[1]))
-    return reduce(reduction, seq, (seq[0],seq[0]))
-
 def v2add(a, b):
     return a[0] + b[0], a[1] + b[1]
 
