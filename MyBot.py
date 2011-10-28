@@ -35,6 +35,8 @@ def get_path(start, goal, ants):
         #v2sub(start, loc), v2sub(goal, loc), path)
     return map(lambda p1: v2add(p1, loc), path)
 
+TARGET_RESET = 10
+
 class MyBot:
     def __init__(self):
         self.ants_straight = {}
@@ -44,6 +46,7 @@ class MyBot:
         self.turns = 0
         self.food = []
         self.enemy_hills = []
+        self.targets = set()
         self.my_hills = []
         self.ants = None
         self.guard_threshold = 0.0
@@ -69,6 +72,9 @@ class MyBot:
         self.new_guarding = {}
 
         self.turns += 1
+
+        if self.turns % TARGET_RESET == 0:
+            self.targets.clear()
 
         x = self.turns / ants.turns
         self.guard_threshold = atan(2.0 * x) / 3.0
@@ -104,6 +110,8 @@ class MyBot:
                             self.new_tracking[dest] = path_tail
                         # that was the last step, do something else
                         else:
+                            if dest in self.targets:
+                                self.targets.remove(dest)
                             self.new_straight[ant] = direction
                     else:
                         log.debug("  dest is occupied or in destinations")
@@ -120,11 +128,13 @@ class MyBot:
             if not ant in self.ants_tracking and self.enemy_hills:
                 hill, _ = min(self.enemy_hills,
                     key=lambda h: ants.distance(h[0], ant))
-                if ants.distance(ant, hill) <= ants.viewradius2:
+                if ants.distance(ant, hill) <= ants.viewradius2 \
+                        and hill not in self.targets:
                     path = get_path(ant, hill, ants)
                     log.info("  found %s hill: %s" %
                         ("reachable" if path else "unreachable", hill))
                     if path:
+                        self.targets.add(hill)
                         log.info("  starts tracking hill")
                         self.new_tracking[ant] = path[1:]
                         continue # to next ant
@@ -132,14 +142,15 @@ class MyBot:
             # food found? find a path to it
             if not ant in self.ants_tracking and self.food:
                 food = min(self.food, key=lambda f: ants.distance(f, ant))
-                if ants.distance(ant, food) <= ants.viewradius2:
+                if ants.distance(ant, food) <= ants.viewradius2 \
+                        and food not in self.targets:
                     path = get_path(ant, food, ants)
                     log.info("  found %s food: %s" %
                         ("reachable" if path else "unreachable", food))
                     if path:
+                        self.targets.add(food)
                         log.info("  starts harvesting")
                         self.new_tracking[ant] = path[1:]
-                        self.food.remove(food)
                         continue # to next ant
 
             # new (or free) ants:
