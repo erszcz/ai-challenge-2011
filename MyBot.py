@@ -215,17 +215,8 @@ class MyBot:
             if ant in self.ants_straight:
                 log.info("  goes straight")
                 direction = self.ants_straight[ant]
-                where = lambda loc: self.distant(ant, loc)
-                for dest in map(where, self.straight[direction]):
-                    if ants.passable(dest):
-                        step_direction = ants.direction(ant, dest)[0]
-                        step_destination = ants.destination(ant,
-                                step_direction)
-                        if self.move(ant, step_destination,
-                                step_direction):
-                            self.new_straight[step_destination] = direction
-                            break
-                # else wait
+                if not self.walk(ant, direction):
+                    self.walk(ant, BEHIND[direction])
 
             # send ants going in a straight line in the same direction
             #if ant in self.ants_straight:
@@ -274,11 +265,35 @@ class MyBot:
                                 #break
         self.end_turn()
 
+    def walk(self, ant, direction):
+        where = lambda loc: self.distant(ant, loc)
+        for dest in map(where, self.straight[direction]):
+            reachable = True
+            while reachable:
+                direction = self.ants.direction(dest, ant)[0]
+                newdest = self.ants.destination(dest, direction)
+                if newdest == ant:
+                    break
+                dest = newdest
+                reachable = self.ants.passable(dest)
+            if reachable:
+                if self.move(ant, dest, BEHIND[direction]):
+                    self.new_straight[dest] = direction
+                    return True
+        return False
+
     def unoccupied(self, loc):
         owner = self.ants.ant_list.get(loc, MY_ANT-1)
         if owner == MY_ANT and loc in self.leaving:
             return True
         return self.ants.unoccupied(loc)
+
+    #def can_move(self, ant, d):
+        #dest = d if d not in ["n","s","w","e"] else ants.destination(ant, d)
+        #return self.unoccupied(dest) and not dest in self.destinations
+    
+    #def move(self, ant, d):
+        #dest = d if d not in ["n","s","w","e"] else ants.destination(ant, d)
 
     def move(self, ant, dest, direction=None):
         if self.unoccupied(dest) and not dest in self.destinations:
