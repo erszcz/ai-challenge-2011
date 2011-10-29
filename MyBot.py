@@ -101,62 +101,6 @@ class MyBot:
             log.info("turn %d: ant %s" % (self.turns, ant))
             log.debug("  time remaining: %d" % ants.time_remaining())
 
-            # tracking a path?
-            if ant in self.ants_tracking:
-                log.info("  is harvesting")
-                path = self.ants_tracking[ant]
-                dest, path_tail = path[0], path[1:]
-                log.debug("  dest: %s, tail: %s", dest, path_tail)
-                if ants.passable(dest):
-                    log.debug("  dest is passable")
-                    if self.unoccupied(dest) and not dest in self.destinations:
-                        direction = ants.direction(ant, dest)[0]
-                        ants.issue_order((ant, direction))
-                        self.leaving.add(ant)
-                        self.destinations.append(dest)
-                        # path unfinished?
-                        if path_tail:
-                            self.new_tracking[dest] = path_tail
-                        # that was the last step, do something else
-                        else:
-                            self.new_straight[ant] = direction
-                    else:
-                        log.debug("  dest is occupied or in destinations")
-                        path.insert(0, ant)
-                        shuffle(DIRECTIONS)
-                        for d in DIRECTIONS:
-                            dest = ants.destination(ant, d)
-                            if self.move(ant, dest):
-                                self.new_tracking[dest] = path
-                                break
-                    continue
-
-            # enemy hills?
-            if not ant in self.ants_tracking and self.enemy_hills:
-                hill, _ = min(self.enemy_hills,
-                    key=lambda h: ants.distance(h[0], ant))
-                if ants.distance(ant, hill) <= ants.viewradius2:
-                    path = get_path(ant, hill, ants)
-                    log.info("  found %s hill: %s" %
-                        ("reachable" if path else "unreachable", hill))
-                    if path:
-                        log.info("  starts tracking hill")
-                        self.new_tracking[ant] = path[1:]
-                        continue # to next ant
-
-            # food found? find a path to it
-            if not ant in self.ants_tracking and self.food:
-                food = min(self.food, key=lambda f: ants.distance(f, ant))
-                if ants.distance(ant, food) <= ants.viewradius2:
-                    path = get_path(ant, food, ants)
-                    log.info("  found %s food: %s" %
-                        ("reachable" if path else "unreachable", food))
-                    if path:
-                        log.info("  starts harvesting")
-                        self.new_tracking[ant] = path[1:]
-                        self.food.remove(food)
-                        continue # to next ant
-
             # new (or free) ants:
             if (not ant in self.ants_straight and
                     not ant in self.ants_lefty and
@@ -170,10 +114,35 @@ class MyBot:
                     hill = min(self.my_hills, key=distance_to)
                     self.ants_guarding[ant] = hill
                 else:
+                    # look for targets
+                    path = None
+                    # enemy hills?
+                    if not ant in self.ants_tracking and self.enemy_hills:
+                        hill, _ = min(self.enemy_hills,
+                            key=lambda h: ants.distance(h[0], ant))
+                        if ants.distance(ant, hill) <= ants.viewradius2:
+                            path = get_path(ant, hill, ants)
+                            log.info("  found %s hill: %s" %
+                                ("reachable" if path else "unreachable", hill))
+                            if path:
+                                log.info("  starts tracking hill")
+                                self.ants_tracking[ant] = path[1:]
+                    # food found? find a path to it
+                    elif not ant in self.ants_tracking and self.food:
+                        food = min(self.food, key=lambda f: ants.distance(f, ant))
+                        if ants.distance(ant, food) <= ants.viewradius2:
+                            path = get_path(ant, food, ants)
+                            log.info("  found %s food: %s" %
+                                ("reachable" if path else "unreachable", food))
+                            if path:
+                                log.info("  starts harvesting")
+                                self.ants_tracking[ant] = path[1:]
+                                self.food.remove(food)
                     # scout/straight/gather food
-                    log.info("  starts going straight")
-                    direction = rand(DIRECTIONS)
-                    self.ants_straight[ant] = direction
+                    if not path:
+                        log.info("  starts going straight")
+                        direction = rand(DIRECTIONS)
+                        self.ants_straight[ant] = direction
 
             # guarding - random walk in vicinity of a hill
             if ant in self.ants_guarding:
@@ -241,6 +210,36 @@ class MyBot:
                                 self.new_straight[ant] = RIGHT[direction]
                                 self.destinations.append(ant)
                                 break
+
+            # tracking a path?
+            if ant in self.ants_tracking:
+                log.info("  is harvesting")
+                path = self.ants_tracking[ant]
+                dest, path_tail = path[0], path[1:]
+                log.debug("  dest: %s, tail: %s", dest, path_tail)
+                if ants.passable(dest):
+                    log.debug("  dest is passable")
+                    if self.unoccupied(dest) and not dest in self.destinations:
+                        direction = ants.direction(ant, dest)[0]
+                        ants.issue_order((ant, direction))
+                        self.leaving.add(ant)
+                        self.destinations.append(dest)
+                        # path unfinished?
+                        if path_tail:
+                            self.new_tracking[dest] = path_tail
+                        # that was the last step, do something else
+                        else:
+                            self.new_straight[ant] = direction
+                    else:
+                        log.debug("  dest is occupied or in destinations")
+                        path.insert(0, ant)
+                        shuffle(DIRECTIONS)
+                        for d in DIRECTIONS:
+                            dest = ants.destination(ant, d)
+                            if self.move(ant, dest):
+                                self.new_tracking[dest] = path
+                                break
+
         self.end_turn()
 
     def unoccupied(self, loc):
