@@ -63,6 +63,7 @@ class MyBot:
         #self.ants_lefty = {}
         self.ants_tracking = {}
         self.ants_guarding = {}
+        self.leaving = set()
         self.turns = 0
         self.food = []
         self.enemy_hills = []
@@ -94,6 +95,7 @@ class MyBot:
         #self.new_lefty = {}
         self.new_tracking = {}
         self.new_guarding = {}
+        self.leaving.clear()
 
         self.turns += 1
 
@@ -122,9 +124,10 @@ class MyBot:
                 log.debug("  dest: %s, tail: %s", dest, path_tail)
                 if ants.passable(dest):
                     log.debug("  dest is passable")
-                    if ants.unoccupied(dest) and not dest in self.destinations:
+                    if self.unoccupied(dest) and not dest in self.destinations:
                         direction = ants.direction(ant, dest)[0]
                         ants.issue_order((ant, direction))
+                        self.leaving.add(ant)
                         self.destinations.append(dest)
                         # path unfinished?
                         if path_tail:
@@ -230,9 +233,10 @@ class MyBot:
                 #direction = self.ants_straight[ant]
                 #n_row, n_col = ants.destination(ant, direction)
                 #if ants.passable((n_row, n_col)):
-                    #if (ants.unoccupied((n_row, n_col)) and
+                    #if (self.unoccupied((n_row, n_col)) and
                             #not (n_row, n_col) in self.destinations):
                         #ants.issue_order((ant, direction))
+                        #self.leaving.add(ant)
                         #self.new_straight[(n_row, n_col)] = direction
                         #self.destinations.append((n_row, n_col))
                     #else:
@@ -256,9 +260,10 @@ class MyBot:
                         #ants.destination(ant, new_direction)
                     #if ants.passable((n_row, n_col)):
                         #if not ants.dead_end((n_row, n_col), new_direction):
-                            #if (ants.unoccupied((n_row, n_col))
+                            #if (self.unoccupied((n_row, n_col))
                                     #and not (n_row, n_col) in self.destinations):
                                 #ants.issue_order((ant, new_direction))
+                                #self.leaving.add(ant)
                                 #self.new_lefty[(n_row, n_col)] = new_direction
                                 #self.destinations.append((n_row, n_col))
                                 #break
@@ -269,10 +274,17 @@ class MyBot:
                                 #break
         self.end_turn()
 
+    def unoccupied(self, loc):
+        owner = self.ants.ant_list.get(loc, MY_ANT-1)
+        if owner == MY_ANT and loc in self.leaving:
+            return True
+        return self.ants.unoccupied(loc)
+
     def move(self, ant, dest, direction=None):
-        if self.ants.unoccupied(dest) and not dest in self.destinations:
+        if self.unoccupied(dest) and not dest in self.destinations:
             d = direction if direction else self.ants.direction(ant, dest)[0]
             self.ants.issue_order((ant, d))
+            self.leaving.add(ant)
             self.destinations.append(dest)
             return True
         return False
