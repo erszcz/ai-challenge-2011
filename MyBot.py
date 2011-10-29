@@ -6,6 +6,7 @@ from ants import *
 
 from math import atan
 import astar
+from math import sqrt
 
 import logging as log
 log.basicConfig(format='%(message)s',
@@ -69,6 +70,8 @@ class MyBot:
         log.info("  spawnradius2: %d", ants.spawnradius2)
         pass
 
+        self.viewradius = int(sqrt(ants.viewradius2)) + 1
+
     def start_turn(self, ants):
         self.ants = ants
         self.food = ants.food()
@@ -118,8 +121,8 @@ class MyBot:
                         if path_tail:
                             self.new_tracking[dest] = path_tail
                         # that was the last step, do something else
-                        else:
-                            self.new_straight[ant] = direction
+                        #else:
+                            #self.new_straight[ant] = direction
                     else:
                         log.debug("  dest is occupied or in destinations")
                         path.insert(0, ant)
@@ -131,31 +134,29 @@ class MyBot:
                                 break
                     continue
 
-            # enemy hills?
-            if not ant in self.ants_tracking and self.enemy_hills:
-                hill, _ = min(self.enemy_hills,
-                    key=lambda h: ants.distance(h[0], ant))
-                if ants.distance(ant, hill) <= ants.viewradius2:
-                    path = get_path(ant, hill, ants)
-                    log.info("  found %s hill: %s" %
-                        ("reachable" if path else "unreachable", hill))
+            # look for targets
+            if not ant in self.ants_tracking \
+                    and (self.enemy_hills or self.food):
+                path = None
+                log.debug("  looking for targets")
+                targets = []
+                for loc in self.field_of_view(ant):
+                    if loc in self.enemy_hills \
+                            or loc in self.food:
+                        targets.append(loc)
+                distance_to = lambda target: ants.distance(ant, target)
+                targets.sort(key=distance_to)
+                for loc in targets:
+                    path = get_path(ant, loc, ants)
+                    log.info("  found %s target: %s" %
+                        ("reachable" if path else "unreachable", loc))
                     if path:
-                        log.info("  starts tracking hill")
+                        log.info("  starts tracking target")
                         self.new_tracking[ant] = path[1:]
-                        continue # to next ant
-
-            # food found? find a path to it
-            if not ant in self.ants_tracking and self.food:
-                food = min(self.food, key=lambda f: ants.distance(f, ant))
-                if ants.distance(ant, food) <= ants.viewradius2:
-                    path = get_path(ant, food, ants)
-                    log.info("  found %s food: %s" %
-                        ("reachable" if path else "unreachable", food))
-                    if path:
-                        log.info("  starts harvesting")
-                        self.new_tracking[ant] = path[1:]
-                        self.food.remove(food)
-                        continue # to next ant
+                        self.ants_tracking[ant] = path
+                        break # path found
+                if path:
+                    continue # to next ant
 
             # new (or free) ants:
             if (not ant in self.ants_straight and
@@ -257,6 +258,16 @@ class MyBot:
             self.destinations.append(dest)
             return True
         return False
+
+    def field_of_view(self, ant):
+        vr = self.viewradius
+        ar, ac = ant
+        for r in xrange(ar - vr, ar):
+            for c in xrange(ac - vr, ac):
+                yield (r,c)
+        for r in xrange(ar + 1, ar + vr + 1):
+            for c in xrange(ac + 1, ac + vr + 1):
+                yield (r,c)
 
 if __name__ == '__main__':
     try:
