@@ -104,36 +104,6 @@ class MyBot:
             log.info("turn %d: ant %s" % (self.turns, ant))
             log.debug("  time remaining: %d" % ants.time_remaining())
 
-            # tracking a path?
-            if ant in self.ants_tracking:
-                log.info("  is harvesting")
-                path = self.ants_tracking[ant]
-                dest, path_tail = path[0], path[1:]
-                log.debug("  dest: %s, tail: %s", dest, path_tail)
-                if ants.passable(dest):
-                    log.debug("  dest is passable")
-                    if self.unoccupied(dest) and not dest in self.destinations:
-                        direction = ants.direction(ant, dest)[0]
-                        ants.issue_order((ant, direction))
-                        self.leaving.add(ant)
-                        self.destinations.append(dest)
-                        # path unfinished?
-                        if path_tail:
-                            self.new_tracking[dest] = path_tail
-                        # that was the last step, do something else
-                        #else:
-                            #self.new_straight[ant] = direction
-                    else:
-                        log.debug("  dest is occupied or in destinations")
-                        path.insert(0, ant)
-                        shuffle(DIRECTIONS)
-                        for d in DIRECTIONS:
-                            dest = ants.destination(ant, d)
-                            if self.move(ant, dest):
-                                self.new_tracking[dest] = path
-                                break
-                    continue
-
             # look for targets
             if not ant in self.ants_tracking \
                     and (self.enemy_hills or self.food):
@@ -171,7 +141,6 @@ class MyBot:
                     hill = min(self.my_hills, key=distance_to)
                     self.ants_guarding[ant] = hill
                 else:
-                    # scout/straight/gather food
                     log.info("  starts going straight")
                     direction = rand(DIRECTIONS)
                     self.ants_straight[ant] = direction
@@ -242,6 +211,36 @@ class MyBot:
                                 self.new_straight[ant] = RIGHT[direction]
                                 self.destinations.append(ant)
                                 break
+
+            # tracking a path?
+            if ant in self.ants_tracking:
+                log.info("  is harvesting")
+                path = self.ants_tracking[ant]
+                dest, path_tail = path[0], path[1:]
+                log.debug("  dest: %s, tail: %s", dest, path_tail)
+                if ants.passable(dest):
+                    log.debug("  dest is passable")
+                    if self.unoccupied(dest) and not dest in self.destinations:
+                        direction = ants.direction(ant, dest)[0]
+                        ants.issue_order((ant, direction))
+                        self.leaving.add(ant)
+                        self.destinations.append(dest)
+                        # path unfinished?
+                        if path_tail:
+                            self.new_tracking[dest] = path_tail
+                        # that was the last step, do something else
+                        else:
+                            self.new_straight[ant] = direction
+                    else:
+                        log.debug("  dest is occupied or in destinations")
+                        path.insert(0, ant)
+                        shuffle(DIRECTIONS)
+                        for d in DIRECTIONS:
+                            dest = ants.destination(ant, d)
+                            if self.move(ant, dest):
+                                self.new_tracking[dest] = path
+                                break
+
         self.end_turn()
 
     def unoccupied(self, loc):
