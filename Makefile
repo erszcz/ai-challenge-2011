@@ -21,9 +21,7 @@ test-game:
 		--log_input \
 		--log_stderr \
 		"python MyBot.py" \
-		"python MyBot4.py" \
-		"python MyBot4.py" \
-		"python MyBot4.py"
+		"python uploads/4/MyBot.py"
 
 zip:
 	[ -f rszymczyszyn.zip ] && rm rszymczyszyn.zip; \
