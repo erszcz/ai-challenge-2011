@@ -48,8 +48,6 @@ class MyBot:
         self.viewradius = int(sqrt(ants.viewradius2)) + 1
         self.attackradius = int(sqrt(ants.attackradius2)) + 1
 
-        self.maxdistance = ants.rows + ants.cols
-
         self.regions = {}
         self.region_centres = set()
         regionh = regionw = self.viewradius
@@ -336,16 +334,8 @@ class MyBot:
                 c // regionw * regionw + regionw // 2)
 
     def region_weight(self, ant):
-        now = self.turn
-        _, mintime = min(self.regions.items(), key=lambda r: r[1])
         def weight(r):
             loc, ts = r
-            #t = (float(ts) - mintime) / now
-            t = float(ts) / now
-            #return t + self.ants.distance(ant, loc) / self.maxdistance
-            #return t + self.ants.distance(ant, loc)
-            #return t / self.ants.distance(ant, loc)
-            #return t, self.ants.distance(ant, loc)
             return ts, self.ants.distance(ant, loc)
         return weight
 
