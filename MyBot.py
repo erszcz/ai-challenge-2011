@@ -93,30 +93,26 @@ class MyBot:
             log.info("turn %d: ant %s" % (self.turn, ant))
             log.debug("  time remaining: %d" % ants.time_remaining())
 
-            # enemy hills?
-            #if not ant in self.ants_tracking and self.enemy_hills:
-                #hill = min(self.enemy_hills, key=distance_to)
-                #if ants.distance(ant, hill) <= ants.viewradius2:
-                    #path = self.get_path(ant, hill)
-                    #log.info("  found %s hill: %s" %
-                        #("reachable" if path else "unreachable", hill))
-                    #if path:
-                        #log.info("  starts tracking hill: %s" % path)
-                        #self.cancel_actions(ant)
-                        #self.ants_tracking[ant] = path[1:]
-
-            # food found? find a path to it
-            #if not ant in self.ants_tracking and self.food:
-                #food = min(self.food, key=distance_to)
-                #if ants.distance(ant, food) <= ants.viewradius2:
-                    #path = self.get_path(ant, food)
-                    #log.info("  found %s food: %s" %
-                        #("reachable" if path else "unreachable", food))
-                    #if path:
-                        #log.info("  starts harvesting: %s" % path)
-                        #self.cancel_actions(ant)
-                        #self.ants_tracking[ant] = path[1:]
-                        ##self.food.remove(food)
+            targets = self.scan(ant)
+            if targets:
+                target, targets = targets[0], targets[1:]
+                path = self.get_path(ant, target)
+                while not path and targets:
+                    log.debug("  target %s is unreachable, trying again"
+                            % str(target))
+                    target, targets = targets[0], targets[1:]
+                    path = self.get_path(ant, target)
+                if path:
+                    log.info("  target chosen: %s" % str(target))
+                    log.debug("  time remaining: %d" % ants.time_remaining())
+                    if ant in self.ants_tracking:
+                        oldtarget = self.ants_tracking[ant][-1]
+                        log.debug("  old target present %s" % str(oldtarget))
+                        path.extend(self.get_path(target, oldtarget)[1:])
+                    self.cancel_actions(ant)
+                    self.ants_tracking[ant] = path[1:]
+                else:
+                    log.info("  no target is reachable")
 
             # new (or free) ants:
             if (not ant in self.ants_straight and
@@ -147,7 +143,8 @@ class MyBot:
                         regions.remove((region,t))
                         path = self.get_path(ant, region, local=False)
                     if path:
-                        log.info("  region %s chosen" % str(region))
+                        log.info("  region chosen: %s" % str(region))
+                        log.debug("  time remaining: %d" % ants.time_remaining())
                         self.cancel_actions(ant)
                         self.ants_tracking[ant] = path[1:]
                     else:
@@ -208,6 +205,8 @@ class MyBot:
                                 if self.move(ant, dest):
                                     self.new_tracking[dest] = path
                                     break
+                else:
+                    log.debug("  path broken, tracking cancelled")
 
             # send ants going in a straight line in the same direction
             if ant in self.ants_straight:
@@ -338,6 +337,16 @@ class MyBot:
             loc, ts = r
             return ts, self.ants.distance(ant, loc)
         return weight
+
+    def scan(self, ant):
+        targets = []
+        for loc in self.field_of_view(ant):
+            if loc in self.enemy_hills or loc in self.food:
+                targets.append(loc)
+        distance_to = lambda target: self.ants.distance(ant, target)
+        targets.sort(key=distance_to)
+        log.debug("  scan: %s" % str(targets))
+        return targets
 
 
 if __name__ == '__main__':
