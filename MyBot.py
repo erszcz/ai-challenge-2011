@@ -6,6 +6,7 @@ from ants import *
 
 from math import atan
 import astar
+from math import sqrt
 
 import logging as log
 log.basicConfig(format='%(message)s',
@@ -22,30 +23,6 @@ def v2add(a, b):
 
 def v2sub(a, b):
     return a[0] - b[0], a[1] - b[1]
-
-def get_path(start, goal, ants):
-    #log.debug("get_path: g =\n  %s" % str(g))
-
-    graph_h = ants.rows
-    graph_w = ants.cols
-    rmin, rmax = [f(start[0], goal[0]) for f in [min, max]]
-    cmin, cmax = [f(start[1], goal[1]) for f in [min, max]]
-
-    def adjacent(node):
-        #log.debug("adjacent: %s" % str(node))
-        r, c = node
-        in_graph = lambda p: p[0] >= rmin and p[0] <= rmax \
-                and p[1] >= cmin and p[1] <= cmax
-        return filter(lambda p: in_graph(p) and ants.passable(p),
-                [ (r, c-1), (r, c+1), (r-1, c), (r+1, c) ])
-
-    p = astar.path(ants.map, start, goal, adjacent, ants.distance,
-            astar.h_cross)
-    
-    #log.debug("get_path: path =\n  %s" % str(p))
-    #dump_path("path_%s_%s_%s.dat" % (start, goal, time.time()),
-            #graph, start, goal, p, passable=passable)
-    return p
 
 class MyBot:
     def __init__(self):
@@ -68,6 +45,9 @@ class MyBot:
         log.info("  attackradius2: %d", ants.attackradius2)
         log.info("  spawnradius2: %d", ants.spawnradius2)
         pass
+
+        self.viewradius = int(sqrt(ants.viewradius2)) + 1
+        self.attackradius = int(sqrt(ants.attackradius2)) + 1
 
     def start_turn(self, ants):
         self.ants = ants
@@ -101,61 +81,29 @@ class MyBot:
             log.info("turn %d: ant %s" % (self.turns, ant))
             log.debug("  time remaining: %d" % ants.time_remaining())
 
-            # tracking a path?
-            if ant in self.ants_tracking:
-                log.info("  is harvesting")
-                path = self.ants_tracking[ant]
-                dest, path_tail = path[0], path[1:]
-                log.debug("  dest: %s, tail: %s", dest, path_tail)
-                if ants.passable(dest):
-                    log.debug("  dest is passable")
-                    if self.unoccupied(dest) and not dest in self.destinations:
-                        direction = ants.direction(ant, dest)[0]
-                        ants.issue_order((ant, direction))
-                        self.leaving.add(ant)
-                        self.destinations.append(dest)
-                        # path unfinished?
-                        if path_tail:
-                            self.new_tracking[dest] = path_tail
-                        # that was the last step, do something else
-                        else:
-                            self.new_straight[ant] = direction
-                    else:
-                        log.debug("  dest is occupied or in destinations")
-                        path.insert(0, ant)
-                        shuffle(DIRECTIONS)
-                        for d in DIRECTIONS:
-                            dest = ants.destination(ant, d)
-                            if self.move(ant, dest):
-                                self.new_tracking[dest] = path
-                                break
-                    continue
-
             # enemy hills?
             if not ant in self.ants_tracking and self.enemy_hills:
                 hill, _ = min(self.enemy_hills,
                     key=lambda h: ants.distance(h[0], ant))
                 if ants.distance(ant, hill) <= ants.viewradius2:
-                    path = get_path(ant, hill, ants)
+                    path = self.get_path(ant, hill)
                     log.info("  found %s hill: %s" %
                         ("reachable" if path else "unreachable", hill))
                     if path:
                         log.info("  starts tracking hill")
-                        self.new_tracking[ant] = path[1:]
-                        continue # to next ant
+                        self.ants_tracking[ant] = path[1:]
 
             # food found? find a path to it
             if not ant in self.ants_tracking and self.food:
                 food = min(self.food, key=lambda f: ants.distance(f, ant))
                 if ants.distance(ant, food) <= ants.viewradius2:
-                    path = get_path(ant, food, ants)
+                    path = self.get_path(ant, food)
                     log.info("  found %s food: %s" %
                         ("reachable" if path else "unreachable", food))
                     if path:
                         log.info("  starts harvesting")
-                        self.new_tracking[ant] = path[1:]
+                        self.ants_tracking[ant] = path[1:]
                         self.food.remove(food)
-                        continue # to next ant
 
             # new (or free) ants:
             if (not ant in self.ants_straight and
@@ -195,6 +143,35 @@ class MyBot:
                 if not done and not ant in self.destinations:
                     self.new_guarding[ant] = hill
                     self.destinations.append(ant)
+
+            # tracking a path?
+            if ant in self.ants_tracking:
+                log.info("  is tracking")
+                path = self.ants_tracking[ant]
+                dest, path_tail = path[0], path[1:]
+                log.debug("  dest: %s, tail: %s", dest, path_tail)
+                if ants.passable(dest):
+                    log.debug("  dest is passable")
+                    if self.unoccupied(dest) and not dest in self.destinations:
+                        direction = ants.direction(ant, dest)[0]
+                        ants.issue_order((ant, direction))
+                        self.leaving.add(ant)
+                        self.destinations.append(dest)
+                        # path unfinished?
+                        if path_tail:
+                            self.new_tracking[dest] = path_tail
+                        # that was the last step, do something else
+                        else:
+                            self.new_straight[ant] = direction
+                    else:
+                        log.debug("  dest is occupied or in destinations")
+                        path.insert(0, ant)
+                        shuffle(DIRECTIONS)
+                        for d in DIRECTIONS:
+                            dest = ants.destination(ant, d)
+                            if self.move(ant, dest):
+                                self.new_tracking[dest] = path
+                                break
 
             # send ants going in a straight line in the same direction
             if ant in self.ants_straight:
@@ -241,6 +218,7 @@ class MyBot:
                                 self.new_straight[ant] = RIGHT[direction]
                                 self.destinations.append(ant)
                                 break
+
         self.end_turn()
 
     def unoccupied(self, loc):
@@ -257,6 +235,42 @@ class MyBot:
             self.destinations.append(dest)
             return True
         return False
+
+    def field_of_view(self, ant):
+        vr = self.viewradius
+        ar, ac = ant
+        for r in xrange(ar - vr, ar + vr + 1):
+            for c in xrange(ac - vr, ac + vr + 1):
+                yield (r,c)
+
+    def get_path(self, start, goal, unoccupied=False):
+        #log.debug("get_path: g =\n  %s" % str(g))
+
+        graph_h = self.ants.rows
+        graph_w = self.ants.cols
+        rmin, rmax = [f(start[0], goal[0]) for f in [min, max]]
+        cmin, cmax = [f(start[1], goal[1]) for f in [min, max]]
+
+        in_graph = lambda p: p[0] >= rmin and p[0] <= rmax \
+            and p[1] >= cmin and p[1] <= cmax
+
+        passable = self.ants.passable if not unoccupied else \
+            lambda p: self.ants.passable(p) and self.ants.unoccupied(p)
+
+        def adjacent(node):
+            #log.debug("adjacent: %s" % str(node))
+            r, c = node
+            return filter(lambda p: in_graph(p) and passable(p),
+                    [ (r, c-1), (r, c+1), (r-1, c), (r+1, c) ])
+
+        p = astar.path(self.ants.map, start, goal, adjacent, self.ants.distance,
+                astar.h_cross)
+        
+        #log.debug("get_path: path =\n  %s" % str(p))
+        #dump_path("path_%s_%s_%s.dat" % (start, goal, time.time()),
+                #graph, start, goal, p, passable=passable)
+        return p
+
 
 if __name__ == '__main__':
     try:
