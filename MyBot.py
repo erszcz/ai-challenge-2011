@@ -15,6 +15,8 @@ log.basicConfig(format='%(message)s',
 
 DIRECTIONS = ['n', 's', 'w', 'e']
 
+TIME_MARGIN = 200
+
 def rand(seq):
     return seq[randrange(0, len(seq))]
 
@@ -50,9 +52,9 @@ class MyBot:
 
         self.regions = {}
         self.region_centres = set()
-        regionh = regionw = self.viewradius
-        for r in xrange(regionh // 2, ants.rows, regionh):
-            for c in xrange(regionw // 2, ants.cols, regionw):
+        self.regionh = self.regionw = self.viewradius
+        for r in xrange(self.regionh // 2, ants.rows, self.regionh):
+            for c in xrange(self.regionw // 2, ants.cols, self.regionw):
                 self.regions[(r,c)] = self.turn
                 self.region_centres.add((r,c))
         self.nregions = len(self.regions)
@@ -82,7 +84,11 @@ class MyBot:
         self.ants_guarding = self.new_guarding
 
         for ant in self.ants.my_ants():
-            self.regions[self.region_for(ant)] = self.turn
+            region = self.region_for(ant)
+            # we check it, because some region may have been removed due to
+            # its centre being impassable; we don't want to add it again
+            if self.regions.has_key(region):
+                self.regions[region] = self.turn
 
     def do_turn(self, ants):
         self.start_turn(ants)
@@ -115,6 +121,7 @@ class MyBot:
                     log.info("  no target is reachable")
 
             # new (or free) ants:
+            fallback = False
             if (not ant in self.ants_straight and
                     not ant in self.ants_lefty and
                     not ant in self.ants_tracking and
@@ -125,7 +132,7 @@ class MyBot:
                     log.info("  starts guarding")
                     hill = min(self.my_hills, key=distance_to)
                     self.ants_guarding[ant] = hill
-                else:
+                elif ants.time_remaining() > TIME_MARGIN:
                     # choose region to reach
                     log.info("  choosing region")
                     regions = self.regions.items()
@@ -137,8 +144,18 @@ class MyBot:
                     regions.remove((region,t))
                     path = self.get_path(ant, region, local=False)
                     while not path and regions:
+                        if not ants.passable(region):
+                            # if region centre is not passable, don't ever
+                            # make it a path destination again
+                            log.debug("  region centre impassable: %s"
+                                    % str(region))
+                            log.debug("  time remaining: %d" % ants.time_remaining())
+                            del self.regions[region]
                         log.debug("  region %s is unreachable, trying again"
                                 % str(region))
+                        if ants.time_remaining() < TIME_MARGIN:
+                            log.debug("  no time for retry")
+                            break
                         region, t = min(regions, key=rweight)
                         regions.remove((region,t))
                         path = self.get_path(ant, region, local=False)
@@ -148,10 +165,18 @@ class MyBot:
                         self.cancel_actions(ant)
                         self.ants_tracking[ant] = path[1:]
                     else:
-                        log.info("  no region is reachable")
-                        log.info("  starts going straight")
-                        direction = rand(DIRECTIONS)
-                        self.ants_straight[ant] = direction
+                        fallback = True
+                        log.info("  no region selected")
+                else:
+                    fallback = True
+                    log.info("  less than %sms left, skipping pathfinding"
+                            % TIME_MARGIN)
+            if fallback:
+                log.info("  starts going straight")
+                direction = rand(DIRECTIONS)
+                self.ants_straight[ant] = direction
+                del fallback
+
 
             # guarding - random walk in vicinity of a hill
             if ant in self.ants_guarding:
@@ -328,9 +353,8 @@ class MyBot:
 
     def region_for(self, loc):
         r,c = loc
-        regionh = regionw = self.viewradius
-        return (r // regionh * regionh + regionh // 2,
-                c // regionw * regionw + regionw // 2)
+        return (r // self.regionh * self.regionh + self.regionh // 2,
+                c // self.regionw * self.regionw + self.regionw // 2)
 
     def region_weight(self, ant):
         def weight(r):
