@@ -52,7 +52,7 @@ class MyBot:
     def start_turn(self, ants):
         self.ants = ants
         self.food = ants.food()
-        self.enemy_hills = ants.enemy_hills()
+        self.enemy_hills = [loc for loc, owner in ants.enemy_hills()]
         self.my_hills = ants.my_hills()
         
         self.destinations = []
@@ -77,40 +77,41 @@ class MyBot:
         self.start_turn(ants)
 
         for ant in ants.my_ants():
+            distance_to = lambda target: ants.distance(ant, target)
             a_row, a_col = ant
             log.info("turn %d: ant %s" % (self.turns, ant))
             log.debug("  time remaining: %d" % ants.time_remaining())
 
             # enemy hills?
             if not ant in self.ants_tracking and self.enemy_hills:
-                hill, _ = min(self.enemy_hills,
-                    key=lambda h: ants.distance(h[0], ant))
+                hill = min(self.enemy_hills, key=distance_to)
                 if ants.distance(ant, hill) <= ants.viewradius2:
                     path = self.get_path(ant, hill)
                     log.info("  found %s hill: %s" %
                         ("reachable" if path else "unreachable", hill))
                     if path:
-                        log.info("  starts tracking hill")
+                        log.info("  starts tracking hill: %s" % path)
+                        self.cancel_actions(ant)
                         self.ants_tracking[ant] = path[1:]
 
             # food found? find a path to it
             if not ant in self.ants_tracking and self.food:
-                food = min(self.food, key=lambda f: ants.distance(f, ant))
+                food = min(self.food, key=distance_to)
                 if ants.distance(ant, food) <= ants.viewradius2:
                     path = self.get_path(ant, food)
                     log.info("  found %s food: %s" %
                         ("reachable" if path else "unreachable", food))
                     if path:
-                        log.info("  starts harvesting")
+                        log.info("  starts harvesting: %s" % path)
+                        self.cancel_actions(ant)
                         self.ants_tracking[ant] = path[1:]
-                        self.food.remove(food)
+                        #self.food.remove(food)
 
             # new (or free) ants:
             if (not ant in self.ants_straight and
                     not ant in self.ants_lefty and
                     not ant in self.ants_tracking and
                     not ant in self.ants_guarding):
-                distance_to = lambda target: ants.distance(ant, target)
                 choice = random.random()
                 if choice < self.guard_threshold:
                     # guard the hill
@@ -148,30 +149,32 @@ class MyBot:
             if ant in self.ants_tracking:
                 log.info("  is tracking")
                 path = self.ants_tracking[ant]
-                dest, path_tail = path[0], path[1:]
-                log.debug("  dest: %s, tail: %s", dest, path_tail)
-                if ants.passable(dest):
-                    log.debug("  dest is passable")
-                    if self.unoccupied(dest) and not dest in self.destinations:
-                        direction = ants.direction(ant, dest)[0]
-                        ants.issue_order((ant, direction))
-                        self.leaving.add(ant)
-                        self.destinations.append(dest)
-                        # path unfinished?
-                        if path_tail:
-                            self.new_tracking[dest] = path_tail
-                        # that was the last step, do something else
+                if path[-1] in self.food \
+                        or path[-1] in self.enemy_hills:
+                    dest, path_tail = path[0], path[1:]
+                    log.debug("  dest: %s, tail: %s", dest, path_tail)
+                    if ants.passable(dest):
+                        log.debug("  dest is passable")
+                        if self.unoccupied(dest) and not dest in self.destinations:
+                            direction = ants.direction(ant, dest)[0]
+                            ants.issue_order((ant, direction))
+                            self.leaving.add(ant)
+                            self.destinations.append(dest)
+                            # path unfinished?
+                            if path_tail:
+                                self.new_tracking[dest] = path_tail
+                            # that was the last step, do something else
+                            else:
+                                self.new_straight[ant] = direction
                         else:
-                            self.new_straight[ant] = direction
-                    else:
-                        log.debug("  dest is occupied or in destinations")
-                        path.insert(0, ant)
-                        shuffle(DIRECTIONS)
-                        for d in DIRECTIONS:
-                            dest = ants.destination(ant, d)
-                            if self.move(ant, dest):
-                                self.new_tracking[dest] = path
-                                break
+                            log.debug("  dest is occupied or in destinations")
+                            path.insert(0, ant)
+                            shuffle(DIRECTIONS)
+                            for d in DIRECTIONS:
+                                dest = ants.destination(ant, d)
+                                if self.move(ant, dest):
+                                    self.new_tracking[dest] = path
+                                    break
 
             # send ants going in a straight line in the same direction
             if ant in self.ants_straight:
@@ -270,6 +273,16 @@ class MyBot:
         #dump_path("path_%s_%s_%s.dat" % (start, goal, time.time()),
                 #graph, start, goal, p, passable=passable)
         return p
+
+    def cancel_actions(self, ant):
+        dicts = { "going straight": self.ants_straight,
+                  "going lefty"   : self.ants_lefty,
+                  "tracking"      : self.ants_tracking,
+                  "guarding"      : self.ants_guarding }
+        for action, d in dicts.items():
+            if ant in d:
+                log.debug("  cancelled: %s" % action)
+                d.pop(ant)
 
 
 if __name__ == '__main__':
