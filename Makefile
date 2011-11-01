@@ -16,12 +16,20 @@ test-game:
 		--html replay.0.html \
 		--nolaunch \
 		--turns $(TURNS) \
-		--map_file tools/maps/multi_hill_maze/multi_maze_07.map \
+		--map_file tools/maps/symmetric_random_walk/random_walk_08.map \
 		--turntime 1000 \
 		--log_input \
 		--log_stderr \
 		"python MyBot.py" \
-		"python uploads/4/MyBot.py"
+		"python uploads/4/MyBot4.py" \
+		"python uploads/4/MyBot4.py" \
+		"python uploads/4/MyBot4.py" \
+		"python uploads/4/MyBot4.py"
+
+		#"python tools/sample_bots/python/LeftyBot.py" \
+		#"python tools/sample_bots/python/LeftyBot.py" \
+		#"python tools/sample_bots/python/LeftyBot.py" \
+		#"python tools/sample_bots/python/LeftyBot.py"
 
 zip:
 	[ -f rszymczyszyn.zip ] && rm rszymczyszyn.zip; \
