@@ -31,7 +31,7 @@ class MyBot:
         self.ants_tracking = {}
         self.ants_guarding = {}
         self.leaving = set()
-        self.turns = 0
+        self.turn = 0
         self.food = []
         self.enemy_hills = []
         self.my_hills = []
@@ -44,10 +44,20 @@ class MyBot:
         log.info("  viewradius2: %d", ants.viewradius2)
         log.info("  attackradius2: %d", ants.attackradius2)
         log.info("  spawnradius2: %d", ants.spawnradius2)
-        pass
 
         self.viewradius = int(sqrt(ants.viewradius2)) + 1
         self.attackradius = int(sqrt(ants.attackradius2)) + 1
+
+        self.maxdistance = ants.rows + ants.cols
+
+        self.regions = {}
+        self.region_centres = set()
+        regionh = regionw = self.viewradius
+        for r in xrange(regionh // 2, ants.rows, regionh):
+            for c in xrange(regionw // 2, ants.cols, regionw):
+                self.regions[(r,c)] = self.turn
+                self.region_centres.add((r,c))
+        self.nregions = len(self.regions)
 
     def start_turn(self, ants):
         self.ants = ants
@@ -62,9 +72,9 @@ class MyBot:
         self.new_guarding = {}
         self.leaving.clear()
 
-        self.turns += 1
+        self.turn += 1
 
-        x = self.turns / ants.turns
+        x = self.turn / ants.turns
         self.guard_threshold = atan(2.0 * x) / 3.0
 
     def end_turn(self):
@@ -73,39 +83,42 @@ class MyBot:
         self.ants_tracking = self.new_tracking
         self.ants_guarding = self.new_guarding
 
+        for ant in self.ants.my_ants():
+            self.regions[self.region_for(ant)] = self.turn
+
     def do_turn(self, ants):
         self.start_turn(ants)
 
         for ant in ants.my_ants():
             distance_to = lambda target: ants.distance(ant, target)
             a_row, a_col = ant
-            log.info("turn %d: ant %s" % (self.turns, ant))
+            log.info("turn %d: ant %s" % (self.turn, ant))
             log.debug("  time remaining: %d" % ants.time_remaining())
 
             # enemy hills?
-            if not ant in self.ants_tracking and self.enemy_hills:
-                hill = min(self.enemy_hills, key=distance_to)
-                if ants.distance(ant, hill) <= ants.viewradius2:
-                    path = self.get_path(ant, hill)
-                    log.info("  found %s hill: %s" %
-                        ("reachable" if path else "unreachable", hill))
-                    if path:
-                        log.info("  starts tracking hill: %s" % path)
-                        self.cancel_actions(ant)
-                        self.ants_tracking[ant] = path[1:]
+            #if not ant in self.ants_tracking and self.enemy_hills:
+                #hill = min(self.enemy_hills, key=distance_to)
+                #if ants.distance(ant, hill) <= ants.viewradius2:
+                    #path = self.get_path(ant, hill)
+                    #log.info("  found %s hill: %s" %
+                        #("reachable" if path else "unreachable", hill))
+                    #if path:
+                        #log.info("  starts tracking hill: %s" % path)
+                        #self.cancel_actions(ant)
+                        #self.ants_tracking[ant] = path[1:]
 
             # food found? find a path to it
-            if not ant in self.ants_tracking and self.food:
-                food = min(self.food, key=distance_to)
-                if ants.distance(ant, food) <= ants.viewradius2:
-                    path = self.get_path(ant, food)
-                    log.info("  found %s food: %s" %
-                        ("reachable" if path else "unreachable", food))
-                    if path:
-                        log.info("  starts harvesting: %s" % path)
-                        self.cancel_actions(ant)
-                        self.ants_tracking[ant] = path[1:]
-                        #self.food.remove(food)
+            #if not ant in self.ants_tracking and self.food:
+                #food = min(self.food, key=distance_to)
+                #if ants.distance(ant, food) <= ants.viewradius2:
+                    #path = self.get_path(ant, food)
+                    #log.info("  found %s food: %s" %
+                        #("reachable" if path else "unreachable", food))
+                    #if path:
+                        #log.info("  starts harvesting: %s" % path)
+                        #self.cancel_actions(ant)
+                        #self.ants_tracking[ant] = path[1:]
+                        ##self.food.remove(food)
 
             # new (or free) ants:
             if (not ant in self.ants_straight and
@@ -119,10 +132,31 @@ class MyBot:
                     hill = min(self.my_hills, key=distance_to)
                     self.ants_guarding[ant] = hill
                 else:
-                    # scout/straight/gather food
-                    log.info("  starts going straight")
-                    direction = rand(DIRECTIONS)
-                    self.ants_straight[ant] = direction
+                    # choose region to reach
+                    log.info("  choosing region")
+                    regions = self.regions.items()
+                    rweight = self.region_weight(ant)
+                    log.debug("  regions: %s" % \
+                        sorted([(rweight(r), distance_to(r[0]), r) \
+                            for r in regions]))
+                    region, t = min(regions, key=rweight)
+                    regions.remove((region,t))
+                    path = self.get_path(ant, region, local=False)
+                    while not path and regions:
+                        log.debug("  region %s is unreachable, trying again"
+                                % str(region))
+                        region, t = min(regions, key=rweight)
+                        regions.remove((region,t))
+                        path = self.get_path(ant, region, local=False)
+                    if path:
+                        log.info("  region %s chosen" % str(region))
+                        self.cancel_actions(ant)
+                        self.ants_tracking[ant] = path[1:]
+                    else:
+                        log.info("  no region is reachable")
+                        log.info("  starts going straight")
+                        direction = rand(DIRECTIONS)
+                        self.ants_straight[ant] = direction
 
             # guarding - random walk in vicinity of a hill
             if ant in self.ants_guarding:
@@ -149,8 +183,9 @@ class MyBot:
             if ant in self.ants_tracking:
                 log.info("  is tracking")
                 path = self.ants_tracking[ant]
-                if path[-1] in self.food \
-                        or path[-1] in self.enemy_hills:
+                if path and (path[-1] in self.food
+                             or path[-1] in self.enemy_hills
+                             or path[-1] in self.region_centres):
                     dest, path_tail = path[0], path[1:]
                     log.debug("  dest: %s, tail: %s", dest, path_tail)
                     if ants.passable(dest):
@@ -246,7 +281,7 @@ class MyBot:
             for c in xrange(ac - vr, ac + vr + 1):
                 yield (r,c)
 
-    def get_path(self, start, goal, unoccupied=False):
+    def get_path(self, start, goal, local=True, unoccupied=False):
         #log.debug("get_path: g =\n  %s" % str(g))
 
         graph_h = self.ants.rows
@@ -260,14 +295,24 @@ class MyBot:
         passable = self.ants.passable if not unoccupied else \
             lambda p: self.ants.passable(p) and self.ants.unoccupied(p)
 
-        def adjacent(node):
-            #log.debug("adjacent: %s" % str(node))
-            r, c = node
-            return filter(lambda p: in_graph(p) and passable(p),
-                    [ (r, c-1), (r, c+1), (r-1, c), (r+1, c) ])
+        if local:
+            def adjacent(node):
+                #log.debug("adjacent: %s" % str(node))
+                r, c = node
+                return filter(lambda p: in_graph(p) and passable(p),
+                        [ (r, c-1), (r, c+1), (r-1, c), (r+1, c) ])
+        else:
+            def adjacent(node):
+                #log.debug("adjacent: %s" % str(node))
+                r, c = node
+                return filter(passable, [ (r, (c-1) % self.ants.cols),
+                                          (r, (c+1) % self.ants.cols),
+                                          ((r-1) % self.ants.rows, c),
+                                          ((r+1) % self.ants.rows, c) ])
 
         p = astar.path(self.ants.map, start, goal, adjacent, self.ants.distance,
-                astar.h_cross)
+                astar.h_simple)
+                #astar.h_cross)
         
         #log.debug("get_path: path =\n  %s" % str(p))
         #dump_path("path_%s_%s_%s.dat" % (start, goal, time.time()),
@@ -283,6 +328,26 @@ class MyBot:
             if ant in d:
                 log.debug("  cancelled: %s" % action)
                 d.pop(ant)
+
+    def region_for(self, loc):
+        r,c = loc
+        regionh = regionw = self.viewradius
+        return (r // regionh * regionh + regionh // 2,
+                c // regionw * regionw + regionw // 2)
+
+    def region_weight(self, ant):
+        now = self.turn
+        _, mintime = min(self.regions.items(), key=lambda r: r[1])
+        def weight(r):
+            loc, ts = r
+            #t = (float(ts) - mintime) / now
+            t = float(ts) / now
+            #return t + self.ants.distance(ant, loc) / self.maxdistance
+            #return t + self.ants.distance(ant, loc)
+            #return t / self.ants.distance(ant, loc)
+            #return t, self.ants.distance(ant, loc)
+            return ts, self.ants.distance(ant, loc)
+        return weight
 
 
 if __name__ == '__main__':
