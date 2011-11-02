@@ -60,6 +60,8 @@ class MyBot:
                 self.region_centres.add((r,c))
         self.nregions = len(self.regions)
 
+        self.max_path_len = (ants.rows + ants.cols) / 2 * 3
+
     def start_turn(self, ants):
         self.ants = ants
         self.food = ants.food()
@@ -154,7 +156,8 @@ class MyBot:
                             for r in regions]))
                     region, t = min(regions, key=rweight)
                     regions.remove((region,t))
-                    path = self.get_path(ant, region, local=False)
+                    path = self.get_path(ant, region, local=False,
+                            max_path_len=self.max_path_len)
                     while not path and regions:
                         if not ants.passable(region):
                             # if region centre is not passable, don't ever
@@ -165,12 +168,13 @@ class MyBot:
                             del self.regions[region]
                         log.debug("  region %s is unreachable, trying again"
                                 % str(region))
-                        if ants.time_remaining() < TIME_MARGIN:
+                        if ants.time_remaining() < TIME_MARGIN_MEDIUM:
                             log.debug("  no time for retry")
                             break
                         region, t = min(regions, key=rweight)
                         regions.remove((region,t))
-                        path = self.get_path(ant, region, local=False)
+                        path = self.get_path(ant, region, local=False,
+                                max_path_len=self.max_path_len)
                     if path:
                         log.info("  region chosen: %s" % str(region))
                         log.debug("  time remaining: %d" % ants.time_remaining())
@@ -220,6 +224,7 @@ class MyBot:
                              or path[-1] in self.region_centres):
                     dest, path_tail = path[0], path[1:]
                     log.debug("  dest: %s, tail: %s", dest, path_tail)
+                    log.debug("  path length: %s" % (len(path_tail) + 1))
                     if ants.passable(dest):
                         log.debug("  dest is passable")
                         if self.unoccupied(dest) and not dest in self.destinations:
@@ -315,7 +320,8 @@ class MyBot:
             for c in xrange(ac - vr, ac + vr + 1):
                 yield (r,c)
 
-    def get_path(self, start, goal, local=True, unoccupied=False):
+    def get_path(self, start, goal, local=True, unoccupied=False,
+            max_path_len=None):
         #log.debug("get_path: g =\n  %s" % str(g))
 
         graph_h = self.ants.rows
@@ -345,7 +351,7 @@ class MyBot:
                                           ((r+1) % self.ants.rows, c) ])
 
         p = astar.path(self.ants.map, start, goal, adjacent, self.ants.distance,
-                astar.h_simple)
+                astar.h_simple, max_path_len=max_path_len)
                 #astar.h_cross)
         
         #log.debug("get_path: path =\n  %s" % str(p))

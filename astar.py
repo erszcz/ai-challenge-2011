@@ -48,7 +48,7 @@ class priority_set:
 def distance(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-def path(graph, start, goal, adjacent, distance, cost):
+def path(graph, start, goal, adjacent, distance, cost, max_path_len=None):
     #print "path", start, goal
 
     g_score = {}
@@ -68,6 +68,8 @@ def path(graph, start, goal, adjacent, distance, cost):
 
     while not frontier.empty():
         x = frontier.pop()
+        if max_path_len and g_score[x] > max_path_len:
+            break
         if x == goal:
             return reconstruct_path(came_from, goal)
 

@@ -55,7 +55,8 @@ graph6 = [[ 100,   0,   0, 100,   0, 100],
 
 def test():
     #graph, start, goal = graph5, (4,2), (2,2)
-    graph, start, goal = graph3, (0,0), (5,5)
+    #graph, start, goal, max_path_len = graph3, (0,0), (5,5), None
+    graph, start, goal, max_path_len = graph3, (0,0), (5,5), 5
 
     passable = lambda loc: graph[loc[0]][loc[1]] != 100
 
@@ -96,7 +97,7 @@ def test():
         return d_row + d_col
 
     p = path(graph, start, goal, adjacent, distance,
-            h_cross)
+            h_cross, max_path_len=max_path_len)
     
     print("get_path: path =\n  %s" % str(p))
     print "len(path):", len(p)
