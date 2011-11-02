@@ -40,6 +40,7 @@ class MyBot:
         self.my_hills = []
         self.ants = None
         self.guard_threshold = 0.0
+        self.paths = {}
 
     def do_setup(self, ants):
         # initialize data structures after learning the game settings
@@ -154,9 +155,10 @@ class MyBot:
                     log.debug("  regions: %s" % \
                         sorted([(rweight(r), distance_to(r[0]), r) \
                             for r in regions]))
+                    from = region_for(ant)
                     region, t = min(regions, key=rweight)
                     regions.remove((region,t))
-                    path = self.get_path(ant, region, local=False,
+                    path = self.get_path(from, region, local=False,
                             max_path_len=self.max_path_len)
                     while not path and regions:
                         if not ants.passable(region):
@@ -173,9 +175,14 @@ class MyBot:
                             break
                         region, t = min(regions, key=rweight)
                         regions.remove((region,t))
-                        path = self.get_path(ant, region, local=False,
+                        path = self.get_path(from, region, local=False,
                                 max_path_len=self.max_path_len)
                     if path:
+                        to = path[-1]
+                        self.paths[(from, to)] = path
+                        self.paths[(to, from)] = reversed(path)
+                        maxdist = self.regionh + self.regionw
+                        path1 = selg.get_path(ant, path[maxdist])
                         log.info("  region chosen: %s" % str(region))
                         log.debug("  time remaining: %d" % ants.time_remaining())
                         self.cancel_actions(ant)
