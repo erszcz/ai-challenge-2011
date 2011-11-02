@@ -15,7 +15,8 @@ log.basicConfig(format='%(message)s',
 
 DIRECTIONS = ['n', 's', 'w', 'e']
 
-TIME_MARGIN = 200
+TIME_MARGIN_MEDIUM = 200
+TIME_MARGIN_CRITICAL = TIME_MARGIN_MEDIUM / 4
 
 def rand(seq):
     return seq[randrange(0, len(seq))]
@@ -77,6 +78,13 @@ class MyBot:
         x = self.turn / ants.turns
         self.guard_threshold = atan(2.0 * x) / 3.0
 
+        log.debug("new turn: %s" % self.turn)
+        log.debug("  ants straight: %s" % len(self.ants_straight))
+        log.debug("  ants lefty   : %s" % len(self.ants_lefty))
+        log.debug("  ants tracking: %s" % len(self.ants_tracking))
+        log.debug("  ants guarding: %s" % len(self.ants_guarding))
+        log.debug("  my ants      : %s" % len(ants.my_ants()))
+
     def end_turn(self):
         self.ants_straight = self.new_straight
         self.ants_lefty = self.new_lefty
@@ -98,6 +106,10 @@ class MyBot:
             a_row, a_col = ant
             log.info("turn %d: ant %s" % (self.turn, ant))
             log.debug("  time remaining: %d" % ants.time_remaining())
+            if ants.time_remaining() < TIME_MARGIN_CRITICAL:
+                log.info("  time remaining is below %s, skipping all actions"
+                        % TIME_MARGIN_CRITICAL)
+                break
 
             targets = self.scan(ant)
             if targets:
@@ -132,7 +144,7 @@ class MyBot:
                     log.info("  starts guarding")
                     hill = min(self.my_hills, key=distance_to)
                     self.ants_guarding[ant] = hill
-                elif ants.time_remaining() > TIME_MARGIN:
+                elif ants.time_remaining() > TIME_MARGIN_MEDIUM:
                     # choose region to reach
                     log.info("  choosing region")
                     regions = self.regions.items()
@@ -170,7 +182,7 @@ class MyBot:
                 else:
                     fallback = True
                     log.info("  less than %sms left, skipping pathfinding"
-                            % TIME_MARGIN)
+                            % TIME_MARGIN_MEDIUM)
             if fallback:
                 log.info("  starts going straight")
                 direction = rand(DIRECTIONS)
