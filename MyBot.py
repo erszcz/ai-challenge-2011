@@ -168,9 +168,13 @@ class MyBot:
                 choice = random.random()
                 if choice < self.guard_threshold:
                     # guard the hill
-                    log.info("  starts guarding")
-                    hill = min(self.my_hills, key=distance_to)
-                    self.ants_guarding[ant] = hill
+                    if self.my_hills:
+                        log.info("  starts guarding")
+                        hill = min(self.my_hills, key=distance_to)
+                        self.ants_guarding[ant] = hill
+                    else:
+                        log.info("  no hills to guard!")
+                        fallback = True
                 elif ants.time_remaining() > TIME_MARGIN_MEDIUM:
                     # choose region to reach
                     log.info("  choosing region")
@@ -275,9 +279,6 @@ class MyBot:
                     log.debug("  path length: %s" % (len(path_tail) + 1))
                     if ants.passable(dest):
                         log.debug("  dest is passable")
-                        log.debug("  unoccupied(dest): %s" % self.unoccupied(dest))
-                        log.debug("  dest not in self.destinations: %s" %
-                                (dest not in self.destinations))
                         if self.unoccupied(dest) and dest not in self.destinations:
                             direction = ants.direction(ant, dest)[0]
                             ants.issue_order((ant, direction))
