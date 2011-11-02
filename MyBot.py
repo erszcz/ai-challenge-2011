@@ -27,6 +27,26 @@ def v2add(a, b):
 def v2sub(a, b):
     return a[0] - b[0], a[1] - b[1]
 
+def make_in_graph(rmin, rmax, cmin, cmax):
+    in_graph = lambda p: p[0] >= rmin and p[0] < rmax \
+        and p[1] >= cmin and p[1] < cmax
+    return in_graph
+
+def circle(loc, radii):
+  if not hasattr(radii, "__iter__"):
+    # we got a number, not sequence of them
+    radii = [radii]
+  for radius in radii:
+    r,c = loc
+    for c1 in xrange(c - radius, c + radius + 1):
+      yield r - radius, c1
+    for r1 in xrange(r - radius + 1, r + radius):
+      yield r1, c + radius
+    for c1 in xrange(c + radius, c - radius - 1, -1):
+      yield r + radius, c1
+    for r1 in xrange(r + radius - 1, r - radius, -1):
+      yield r1, c - radius
+
 class MyBot:
     def __init__(self):
         self.ants_straight = {}
@@ -41,6 +61,8 @@ class MyBot:
         self.ants = None
         self.guard_threshold = 0.0
         self.paths = {}
+        self.__region_c2w = {}
+        self.__region_w2c = {}
 
     def do_setup(self, ants):
         # initialize data structures after learning the game settings
@@ -53,12 +75,12 @@ class MyBot:
         self.attackradius = int(sqrt(ants.attackradius2)) + 1
 
         self.regions = {}
-        self.region_centres = set()
+        self.region_waypoints = set()
         self.regionh = self.regionw = self.viewradius
         for r in xrange(self.regionh // 2, ants.rows, self.regionh):
             for c in xrange(self.regionw // 2, ants.cols, self.regionw):
                 self.regions[(r,c)] = self.turn
-                self.region_centres.add((r,c))
+                self.region_waypoints.add((r,c))
         self.nregions = len(self.regions)
 
         self.max_path_len = (ants.rows + ants.cols) / 2 * 3
@@ -167,7 +189,6 @@ class MyBot:
                             log.debug("  region centre impassable: %s"
                                     % str(region))
                             log.debug("  time remaining: %d" % ants.time_remaining())
-                            del self.regions[region]
                         log.debug("  region %s is unreachable, trying again"
                                 % str(region))
                         if ants.time_remaining() < TIME_MARGIN_MEDIUM:
@@ -228,7 +249,7 @@ class MyBot:
                 path = self.ants_tracking[ant]
                 if path and (path[-1] in self.food
                              or path[-1] in self.enemy_hills
-                             or path[-1] in self.region_centres):
+                             or path[-1] in self.region_waypoints):
                     dest, path_tail = path[0], path[1:]
                     log.debug("  dest: %s, tail: %s", dest, path_tail)
                     log.debug("  path length: %s" % (len(path_tail) + 1))
@@ -336,8 +357,7 @@ class MyBot:
         rmin, rmax = [f(start[0], goal[0]) for f in [min, max]]
         cmin, cmax = [f(start[1], goal[1]) for f in [min, max]]
 
-        in_graph = lambda p: p[0] >= rmin and p[0] <= rmax \
-            and p[1] >= cmin and p[1] <= cmax
+        in_graph = make_in_graph(rmin, rmax+1, cmin, cmax+1)
 
         passable = self.ants.passable if not unoccupied else \
             lambda p: self.ants.passable(p) and self.ants.unoccupied(p)
@@ -378,8 +398,38 @@ class MyBot:
 
     def region_for(self, loc):
         r,c = loc
-        return (r // self.regionh * self.regionh + self.regionh // 2,
-                c // self.regionw * self.regionw + self.regionw // 2)
+        regionr, regionc = (
+                r // self.regionh * self.regionh + self.regionh // 2,
+                c // self.regionw * self.regionw + self.regionw // 2 )
+        if regionr >= self.ants.rows:
+            regionr -= self.regionh
+        if regionc >= self.ants.cols:
+            regionc -= self.regionw
+        if (regionr, regionc) in self.__region_c2w:
+            return self.__region_c2w[(regionr, regionc)]
+        in_graph = make_in_graph(0, self.ants.rows, 0, self.ants.cols)
+        if (regionr, regionc) in self.regions \
+                and not self.ants.passable((regionr, regionc)):
+            waypoint = None
+            for p in circle(loc,
+                    xrange(1, (self.regionh + self.regionw) // 2 + 1)):
+                if in_graph(p) and self.ants.passable(p):
+                    waypoint = p
+                    break
+            if waypoint:
+                log.debug("  waypoint %s found for region %s"
+                        % (waypoint, (regionr, regionc)))
+                self.__region_c2w[(regionr, regionc)] = waypoint
+                self.__region_w2c[waypoint] = (regionr, regionc)
+                ts = self.regions[(regionr, regionc)]
+                self.regions[waypoint] = ts
+            log.debug("  deleting impassable region centre: %s"
+                    % str((regionr, regionc)))
+            del self.regions[(regionr, regionc)]
+            return waypoint if waypoint else None
+        elif (regionr, regionc) not in self.regions:
+            return None
+        return regionr, regionc
 
     def region_weight(self, ant):
         def weight(r):
