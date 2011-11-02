@@ -56,7 +56,8 @@ graph6 = [[ 100,   0,   0, 100,   0, 100],
 def test():
     #graph, start, goal = graph5, (4,2), (2,2)
     #graph, start, goal, max_path_len = graph3, (0,0), (5,5), None
-    graph, start, goal, max_path_len = graph3, (0,0), (5,5), 5
+    #graph, start, goal, max_path_len = graph3, (0,0), (5,5), 5
+    graph, start, goal, max_path_len = graph3, (0,0), (0,0), 5
 
     passable = lambda loc: graph[loc[0]][loc[1]] != 100
 
@@ -67,26 +68,36 @@ def test():
 
     print "rmin, rmax:",rmin,rmax
     print "cmin, cmax:",cmin,cmax
-
+    
+    # paths across edges
     def adjacent(node):
-        print("adjacent: %s" % str(node))
+        #log.debug("adjacent: %s" % str(node))
         r, c = node
-        in_graph = lambda p: p[0] >= rmin and p[0] <= rmax \
-                and p[1] >= cmin and p[1] <= cmax
-        result = filter(lambda p: in_graph(p) and passable(p),
-                [ (r, c-1), (r, c+1), (r-1, c), (r+1, c) ])
-        #result = []
-        #for p in [ (r, c-1), (r, c+1), (r-1, c), (r+1, c) ]:
-            #print "  p:", p
-            #print "  in graph:", in_graph(p)
-            #print "  passable:", 
-            #try:
-                #print passable(p)
-            #except IndexError, e:
-                #print "out of graph"
-            #if in_graph(p) and passable(p):
-                #result.append(p)
-        return result
+        return filter(passable, [ (r, (c-1) % graph_h),
+                                  (r, (c+1) % graph_h),
+                                  ((r-1) % graph_w, c),
+                                  ((r+1) % graph_w, c) ])
+
+    # paths bounded by edges
+    #def adjacent(node):
+        #print("adjacent: %s" % str(node))
+        #r, c = node
+        #in_graph = lambda p: p[0] >= rmin and p[0] <= rmax \
+                #and p[1] >= cmin and p[1] <= cmax
+        #result = filter(lambda p: in_graph(p) and passable(p),
+                #[ (r, c-1), (r, c+1), (r-1, c), (r+1, c) ])
+        ##result = []
+        ##for p in [ (r, c-1), (r, c+1), (r-1, c), (r+1, c) ]:
+            ##print "  p:", p
+            ##print "  in graph:", in_graph(p)
+            ##print "  passable:", 
+            ##try:
+                ##print passable(p)
+            ##except IndexError, e:
+                ##print "out of graph"
+            ##if in_graph(p) and passable(p):
+                ##result.append(p)
+        #return result
 
     def distance(loc1, loc2):
         'calculate the closest distance between to locations'

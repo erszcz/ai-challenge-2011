@@ -15,7 +15,7 @@ log.basicConfig(format='%(message)s',
 
 DIRECTIONS = ['n', 's', 'w', 'e']
 
-TIME_MARGIN_MEDIUM = 200
+TIME_MARGIN_MEDIUM = 500
 TIME_MARGIN_CRITICAL = TIME_MARGIN_MEDIUM / 4
 
 def rand(seq):
@@ -67,9 +67,11 @@ class MyBot:
     def do_setup(self, ants):
         # initialize data structures after learning the game settings
         log.info("setup")
-        log.info("  viewradius2: %d", ants.viewradius2)
+        log.info("  viewradius2  : %d", ants.viewradius2)
         log.info("  attackradius2: %d", ants.attackradius2)
-        log.info("  spawnradius2: %d", ants.spawnradius2)
+        log.info("  spawnradius2 : %d", ants.spawnradius2)
+        log.info("  map.rows     : %d", ants.rows)
+        log.info("  map.cols     : %d", ants.cols)
 
         self.viewradius = int(sqrt(ants.viewradius2)) + 1
         self.attackradius = int(sqrt(ants.attackradius2)) + 1
@@ -177,10 +179,11 @@ class MyBot:
                     log.debug("  regions: %s" % \
                         sorted([(rweight(r), distance_to(r[0]), r) \
                             for r in regions]))
-                    from = region_for(ant)
+                    start = self.region_for(ant)
+                    start = start if start else ant
                     region, t = min(regions, key=rweight)
                     regions.remove((region,t))
-                    path = self.get_path(from, region, local=False,
+                    path = self.get_path(start, region, local=False,
                             max_path_len=self.max_path_len)
                     while not path and regions:
                         if not ants.passable(region):
@@ -196,18 +199,35 @@ class MyBot:
                             break
                         region, t = min(regions, key=rweight)
                         regions.remove((region,t))
-                        path = self.get_path(from, region, local=False,
+                        path = self.get_path(start, region, local=False,
                                 max_path_len=self.max_path_len)
                     if path:
-                        to = path[-1]
-                        self.paths[(from, to)] = path
-                        self.paths[(to, from)] = reversed(path)
+                        if start != ant and (start, region) not in self.paths:
+                            self.paths[(start, region)] = path
+                            self.paths[(region, start)] = list(reversed(path))
                         maxdist = self.regionh + self.regionw
-                        path1 = selg.get_path(ant, path[maxdist])
-                        log.info("  region chosen: %s" % str(region))
-                        log.debug("  time remaining: %d" % ants.time_remaining())
-                        self.cancel_actions(ant)
-                        self.ants_tracking[ant] = path[1:]
+                        join_index, _ = \
+                            min(zip(xrange(maxdist), path[:maxdist]),
+                                key=lambda z: distance_to(z[1]))
+                        #log.debug("  join_index: %s" % join_index)
+                        #log.debug("  path: %s" % path)
+                        #log.debug("  path[join_index]: %s" % \
+                                #str(path[join_index]))
+                        path1 = self.get_path(ant, path[join_index],
+                                local=False, max_path_len=maxdist)
+                        log.debug("  path1: %s" % path1)
+                        if path1:
+                            path = path1 + path[join_index+1:]
+                        else:
+                            path = []
+                        if path:
+                            log.info("  region chosen: %s" % str(region))
+                            log.debug("  time remaining: %d" % ants.time_remaining())
+                            self.cancel_actions(ant)
+                            self.ants_tracking[ant] = path[1:]
+                        else:
+                            fallback = True
+                            log.info("  can't reach interregional path")
                     else:
                         fallback = True
                         log.info("  no region selected")
@@ -255,9 +275,14 @@ class MyBot:
                     log.debug("  path length: %s" % (len(path_tail) + 1))
                     if ants.passable(dest):
                         log.debug("  dest is passable")
-                        if self.unoccupied(dest) and not dest in self.destinations:
+                        log.debug("  unoccupied(dest): %s" % self.unoccupied(dest))
+                        log.debug("  dest not in self.destinations: %s" %
+                                (dest not in self.destinations))
+                        if self.unoccupied(dest) and dest not in self.destinations:
                             direction = ants.direction(ant, dest)[0]
                             ants.issue_order((ant, direction))
+                            log.debug("  move order: %s" % \
+                                    str(ants.destination(ant, direction)))
                             self.leaving.add(ant)
                             self.destinations.append(dest)
                             # path unfinished?
@@ -287,6 +312,8 @@ class MyBot:
                     if (self.unoccupied((n_row, n_col)) and
                             not (n_row, n_col) in self.destinations):
                         ants.issue_order((ant, direction))
+                        log.debug("  move order: %s" % \
+                                str(ants.destination(ant, direction)))
                         self.leaving.add(ant)
                         self.new_straight[(n_row, n_col)] = direction
                         self.destinations.append((n_row, n_col))
@@ -314,6 +341,8 @@ class MyBot:
                             if (self.unoccupied((n_row, n_col))
                                     and not (n_row, n_col) in self.destinations):
                                 ants.issue_order((ant, new_direction))
+                                log.debug("  move order: %s" % \
+                                    str(ants.destination(ant, new_direction)))
                                 self.leaving.add(ant)
                                 self.new_lefty[(n_row, n_col)] = new_direction
                                 self.destinations.append((n_row, n_col))
@@ -328,6 +357,9 @@ class MyBot:
 
     def unoccupied(self, loc):
         owner = self.ants.ant_list.get(loc, MY_ANT-1)
+        #log.debug("  unoccupied:")
+        #log.debug("    owner: %s" % owner)
+        #log.debug("    loc in self.leaving: %s" % (loc in self.leaving))
         if owner == MY_ANT and loc in self.leaving:
             return True
         return self.ants.unoccupied(loc)
@@ -336,6 +368,8 @@ class MyBot:
         if self.unoccupied(dest) and not dest in self.destinations:
             d = direction if direction else self.ants.direction(ant, dest)[0]
             self.ants.issue_order((ant, d))
+            log.debug("  move order: %s" % \
+                    str(self.ants.destination(ant, d)))
             self.leaving.add(ant)
             self.destinations.append(dest)
             return True
@@ -351,6 +385,10 @@ class MyBot:
     def get_path(self, start, goal, local=True, unoccupied=False,
             max_path_len=None):
         #log.debug("get_path: g =\n  %s" % str(g))
+
+        if (start, goal) in self.paths:
+            log.debug("    returning cached path: %s -> %s" % (start, goal))
+            return self.paths[(start, goal)]
 
         graph_h = self.ants.rows
         graph_w = self.ants.cols
