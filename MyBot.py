@@ -92,6 +92,7 @@ class MyBot:
         self.food = ants.food()
         self.enemy_hills = [loc for loc, owner in ants.enemy_hills()]
         self.my_hills = ants.my_hills()
+        self.my_ants = ants.my_ants()
         
         self.destinations = []
         self.new_straight = {}
@@ -118,7 +119,7 @@ class MyBot:
         self.ants_tracking = self.new_tracking
         self.ants_guarding = self.new_guarding
 
-        for ant in self.ants.my_ants():
+        for ant in self.my_ants:
             region = self.region_for(ant)
             # we check it, because some region may have been removed due to
             # its centre being impassable; we don't want to add it again
@@ -128,7 +129,7 @@ class MyBot:
     def do_turn(self, ants):
         self.start_turn(ants)
 
-        for ant in ants.my_ants():
+        for ant in self.my_ants:
             distance_to = lambda target: ants.distance(ant, target)
             a_row, a_col = ant
             log.info("turn %d: ant %s" % (self.turn, ant))
@@ -138,26 +139,27 @@ class MyBot:
                         % TIME_MARGIN_CRITICAL)
                 break
 
-            targets = self.scan(ant)
-            if targets:
-                target, targets = targets[0], targets[1:]
-                path = self.get_path(ant, target)
-                while not path and targets:
-                    log.debug("  target %s is unreachable, trying again"
-                            % str(target))
+            if ant not in self.ants_guarding:
+                targets = self.scan(ant)
+                if targets:
                     target, targets = targets[0], targets[1:]
                     path = self.get_path(ant, target)
-                if path:
-                    log.info("  target chosen: %s" % str(target))
-                    log.debug("  time remaining: %d" % ants.time_remaining())
-                    if ant in self.ants_tracking:
-                        oldtarget = self.ants_tracking[ant][-1]
-                        log.debug("  old target present %s" % str(oldtarget))
-                        path.extend(self.get_path(target, oldtarget)[1:])
-                    self.cancel_actions(ant)
-                    self.ants_tracking[ant] = path[1:]
-                else:
-                    log.info("  no target is reachable")
+                    while not path and targets:
+                        log.debug("  target %s is unreachable, trying again"
+                                % str(target))
+                        target, targets = targets[0], targets[1:]
+                        path = self.get_path(ant, target)
+                    if path:
+                        log.info("  target chosen: %s" % str(target))
+                        log.debug("  time remaining: %d" % ants.time_remaining())
+                        if ant in self.ants_tracking:
+                            oldtarget = self.ants_tracking[ant][-1]
+                            log.debug("  old target present %s" % str(oldtarget))
+                            path.extend(self.get_path(target, oldtarget)[1:])
+                        self.cancel_actions(ant)
+                        self.ants_tracking[ant] = path[1:]
+                    else:
+                        log.info("  no target is reachable")
 
             # new (or free) ants:
             fallback = False
@@ -165,16 +167,17 @@ class MyBot:
                     not ant in self.ants_lefty and
                     not ant in self.ants_tracking and
                     not ant in self.ants_guarding):
-                choice = random.random()
-                if choice < self.guard_threshold:
-                    # guard the hill
-                    if self.my_hills:
-                        log.info("  starts guarding")
-                        hill = min(self.my_hills, key=distance_to)
-                        self.ants_guarding[ant] = hill
-                    else:
-                        log.info("  no hills to guard!")
-                        fallback = True
+                if len(self.my_ants) > 5 and ant in self.my_hills:
+                    log.info("  finding guard spot")
+                    hill = ant
+                    for spot in self.guard_spots(hill):
+                        if self.unoccupied(spot) \
+                                and spot not in self.ants_guarding:
+                            path = self.get_path(hill, spot)
+                            self.ants_tracking[ant] = path[1:]
+                            self.ants_guarding[ant] = hill
+                            log.debug("  will guard: %s" % str(spot))
+                            break
                 elif ants.time_remaining() > TIME_MARGIN_MEDIUM:
                     # choose region to reach
                     log.info("  choosing region")
@@ -245,27 +248,10 @@ class MyBot:
                 self.ants_straight[ant] = direction
                 del fallback
 
-
-            # guarding - random walk in vicinity of a hill
-            if ant in self.ants_guarding:
-                hill = self.ants_guarding[ant]
-                if ants.distance(ant, hill) > ants.spawnradius2 + 2:
-                    d = rand(ants.direction(ant, hill))
-                    directions = [d, RIGHT[d], LEFT[d]]
-                else:
-                    directions = DIRECTIONS
-                    shuffle(directions)
-                done = False
-                for d in directions:
-                    dest = ants.destination(ant, d)
-                    if ants.passable(dest) \
-                            and self.move(ant, dest, direction=d):
-                        self.new_guarding[dest] = hill
-                        done = True
-                        break
-                if not done and not ant in self.destinations:
-                    self.new_guarding[ant] = hill
-                    self.destinations.append(ant)
+            # guarding - just stay still
+            if ant in self.ants_guarding and ant not in self.ants_tracking:
+                log.debug("  guarding: %s" % str(self.ants_guarding[ant]))
+                self.new_guarding[ant] = self.ants_guarding[ant]
 
             # tracking a path?
             if ant in self.ants_tracking:
@@ -273,34 +259,47 @@ class MyBot:
                 path = self.ants_tracking[ant]
                 if path and (path[-1] in self.food
                              or path[-1] in self.enemy_hills
-                             or path[-1] in self.region_waypoints):
+                             or path[-1] in self.region_waypoints
+                             or path[-1] in self.guard_spots()):
                     dest, path_tail = path[0], path[1:]
                     log.debug("  dest: %s, tail: %s", dest, path_tail)
                     log.debug("  path length: %s" % (len(path_tail) + 1))
-                    if ants.passable(dest):
-                        log.debug("  dest is passable")
-                        if self.unoccupied(dest) and dest not in self.destinations:
-                            direction = ants.direction(ant, dest)[0]
-                            ants.issue_order((ant, direction))
-                            log.debug("  move order: %s" % \
-                                    str(ants.destination(ant, direction)))
-                            self.leaving.add(ant)
-                            self.destinations.append(dest)
-                            # path unfinished?
-                            if path_tail:
-                                self.new_tracking[dest] = path_tail
-                            # that was the last step, do something else
-                            else:
-                                self.new_straight[ant] = direction
+                    if self.unoccupied(dest) and dest not in self.destinations:
+                        direction = ants.direction(ant, dest)[0]
+                        ants.issue_order((ant, direction))
+                        if ant in self.ants_guarding:
+                            self.new_guarding[dest] = \
+                                self.ants_guarding[ant]
+                        log.debug("  move order: %s" % \
+                                str(ants.destination(ant, direction)))
+                        self.leaving.add(ant)
+                        self.destinations.append(dest)
+                        # path unfinished?
+                        if path_tail:
+                            self.new_tracking[dest] = path_tail
+                        # that was the last step, do something else
                         else:
-                            log.debug("  dest is occupied or in destinations")
-                            path.insert(0, ant)
-                            shuffle(DIRECTIONS)
-                            for d in DIRECTIONS:
-                                dest = ants.destination(ant, d)
-                                if self.move(ant, dest):
-                                    self.new_tracking[dest] = path
-                                    break
+                            self.new_straight[ant] = direction
+                    elif dest in self.ants_guarding:
+                        # do something else
+                        pass
+                    elif dest in self.destinations or not path_tail:
+                        # wait
+                        self.new_tracking[ant] = path
+                        self.destinations.append(ant)
+                        pass
+                    else:
+                        # try to find path around
+                        log.debug("  dest is occupied")
+                        join_index = 1 if len(path) > 2 else 0
+                        path1 = self.get_path(ant, path[join_index],
+                                local=False, unoccupied=True)
+                        if path1:
+                            self.new_tracking[ant] = \
+                                [path1 + path[join_index+1:]][1:]
+                        else:
+                            self.new_tracking[ant] = path
+                            self.destinations.append(ant)
                 else:
                     log.debug("  path broken, tracking cancelled")
 
@@ -485,6 +484,28 @@ class MyBot:
         targets.sort(key=distance_to)
         log.debug("  scan: %s" % str(targets))
         return targets
+
+    def guard_spots(self, hill=None):
+        hills = self.my_hills if not hill else [hill]
+        for hill in self.my_hills:
+            hr, hc = hill
+            for radius in xrange(4):
+                r, c = (hr - radius) % self.ants.rows, \
+                       (hc - radius) % self.ants.cols
+                if self.ants.passable((r,c)):
+                    yield r,c
+                r, c = (hr - radius) % self.ants.rows, \
+                       (hc + radius) % self.ants.cols
+                if self.ants.passable((r,c)):
+                    yield r,c
+                r, c = (hr + radius) % self.ants.rows, \
+                       (hc + radius) % self.ants.cols
+                if self.ants.passable((r,c)):
+                    yield r,c
+                r, c = (hr + radius) % self.ants.rows, \
+                       (hc - radius) % self.ants.cols
+                if self.ants.passable((r,c)):
+                    yield r,c
 
 
 if __name__ == '__main__':

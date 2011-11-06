@@ -24,8 +24,6 @@ test-game:
 		"python uploads/4/MyBot4.py" \
 		"python uploads/4/MyBot4.py" \
 		"python uploads/4/MyBot4.py" \
-		"python uploads/4/MyBot4.py" \
-		"python uploads/4/MyBot4.py" \
 		"python uploads/4/MyBot4.py"
 		#"python tools/sample_bots/python/LeftyBot.py" \
 		#"python tools/sample_bots/python/LeftyBot.py" \
