@@ -3,6 +3,7 @@
 # vim: sts=4 sw=4 ts=4 tw=74 et
 
 import heapq
+import time
 
 import logging as log
 
@@ -48,8 +49,11 @@ class priority_set:
 def distance(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-def path(graph, start, goal, adjacent, distance, cost, max_path_len=None):
+def path(graph, start, goal, adjacent, distance, cost,
+         max_path_len=None, max_time=None):
     #print "path", start, goal
+
+    time0 = time.time() * 1000  # * 1000 for milliseconds
 
     g_score = {}
     h_score = {}
@@ -67,6 +71,9 @@ def path(graph, start, goal, adjacent, distance, cost, max_path_len=None):
     came_from = {}
 
     while not frontier.empty():
+        now = time.time() * 1000
+        if max_time and now - time0 > max_time:
+            return []
         x = frontier.pop()
         if max_path_len and g_score[x] > max_path_len:
             break

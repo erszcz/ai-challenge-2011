@@ -15,8 +15,9 @@ log.basicConfig(format='%(message)s',
 
 DIRECTIONS = ['n', 's', 'w', 'e']
 
-TIME_MARGIN_MEDIUM = 500
-TIME_MARGIN_CRITICAL = TIME_MARGIN_MEDIUM / 4
+TIME_MARGIN_MEDIUM = 200
+TIME_MARGIN_CRITICAL = 0.33 * TIME_MARGIN_MEDIUM
+TIME_SEARCH = 0.5 * TIME_MARGIN_MEDIUM
 
 def rand(seq):
     return seq[randrange(0, len(seq))]
@@ -85,7 +86,8 @@ class MyBot:
                 self.region_waypoints.add((r,c))
         self.nregions = len(self.regions)
 
-        self.max_path_len = (ants.rows + ants.cols) / 2 * 3
+        #self.max_path_len = (ants.rows + ants.cols) / 2 * 3
+        self.max_path_len = (ants.rows + ants.cols) / 2
 
     def start_turn(self, ants):
         self.ants = ants
@@ -105,7 +107,8 @@ class MyBot:
         x = self.turn / ants.turns
         self.guard_threshold = atan(2.0 * x) / 3.0
 
-        log.debug("new turn: %s" % self.turn)
+        log.debug("start turn: %s" % self.turn)
+        log.debug("  time remaining: %d" % ants.time_remaining())
         log.debug("  ants straight: %s" % len(self.ants_straight))
         log.debug("  ants lefty   : %s" % len(self.ants_lefty))
         log.debug("  ants tracking: %s" % len(self.ants_tracking))
@@ -113,6 +116,9 @@ class MyBot:
         log.debug("  my ants      : %s" % len(ants.my_ants()))
 
     def end_turn(self):
+        log.debug("  end turn: %s" % self.turn)
+        log.debug("    time remaining: %d" % self.ants.time_remaining())
+
         self.ants_straight = self.new_straight
         self.ants_lefty = self.new_lefty
         self.ants_tracking = self.new_tracking
@@ -188,8 +194,9 @@ class MyBot:
                     region, t = min(regions, key=rweight)
                     regions.remove((region,t))
                     path = self.get_path(start, region, local=False,
-                            max_path_len=self.max_path_len)
-                    while not path and regions:
+                            max_time=TIME_SEARCH)
+                    while not path and regions \
+                            and ants.time_remaining() > TIME_MARGIN_MEDIUM:
                         if not ants.passable(region):
                             # if region centre is not passable, don't ever
                             # make it a path destination again
@@ -204,7 +211,7 @@ class MyBot:
                         region, t = min(regions, key=rweight)
                         regions.remove((region,t))
                         path = self.get_path(start, region, local=False,
-                                max_path_len=self.max_path_len)
+                                max_time=TIME_SEARCH)
                     if path:
                         if start != ant and (start, region) not in self.paths:
                             self.paths[(start, region)] = path
@@ -384,7 +391,7 @@ class MyBot:
                 yield (r,c)
 
     def get_path(self, start, goal, local=True, unoccupied=False,
-            max_path_len=None):
+            max_path_len=None, max_time=None):
         #log.debug("get_path: g =\n  %s" % str(g))
 
         if (start, goal) in self.paths:
@@ -417,7 +424,8 @@ class MyBot:
                                           ((r+1) % self.ants.rows, c) ])
 
         p = astar.path(self.ants.map, start, goal, adjacent, self.ants.distance,
-                astar.h_simple, max_path_len=max_path_len)
+                astar.h_simple, max_path_len=max_path_len,
+                max_time=max_time)
                 #astar.h_cross)
         
         #log.debug("get_path: path =\n  %s" % str(p))
